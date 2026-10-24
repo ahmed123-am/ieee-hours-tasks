@@ -6,27 +6,41 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-const heads = [
-  { email: "mhmdmrwf863@gmail.com", committee: "CORE" },
-  { email: "reemtamer02@gmail.com", committee: "CORE" },
-  { email: "mariamhanyjm2670@gmail.com", committee: "HR" },
-  { email: "mohammedosama2486@gmail.com", committee: "HR" },
-  { email: "nourfhed@gmail.com", committee: "PR" },
-  { email: "aboanis541@gmail.com", committee: "LOGISTICS" },
-  { email: "mennaakrab180@gmail.com", committee: "LOGISTICS" },
-  { email: "rawahamed2025@gmail.com", committee: "MEDIA" },
-  { email: "karolene221@gmail.com", committee: "MEDIA" },
-  { email: "elawadlysara57@gmail.com", committee: "PROGRAMMING" },
-  { email: "Omar212hossam@gmail.com", committee: "PROGRAMMING" },
-];
+const TEST_HEAD = {
+  email: "elawadlysara57@gmail.com",
+  committee: "PROGRAMMING",
+};
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    // 1. Verify the temporary setup token.
+    const token = request.headers.get("x-heads-setup-token");
+    const expectedToken = process.env.HEADS_SETUP_TOKEN;
+
+    if (!expectedToken || !token || token !== expectedToken) {
+      return NextResponse.json(
+        { error: "Unauthorized." },
+        { status: 401 }
+      );
+    }
+
+    // 2. Create the authenticated Supabase server client.
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const publishableKey =
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+    if (!supabaseUrl || !publishableKey) {
+      return NextResponse.json(
+        { error: "Supabase environment variables are missing." },
+        { status: 500 }
+      );
+    }
+
     const cookieStore = await cookies();
 
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      supabaseUrl,
+      publishableKey,
       {
         cookies: {
           getAll() {
@@ -45,6 +59,7 @@ export async function POST() {
       }
     );
 
+    // 3. Require a valid logged-in user.
     const {
       data: { user },
       error: authError,
@@ -52,11 +67,12 @@ export async function POST() {
 
     if (authError || !user) {
       return NextResponse.json(
-        { error: "يجب تسجيل الدخول أولاً." },
+        { error: "Sign in to the website first." },
         { status: 401 }
       );
     }
 
+    // 4. Require an active admin or secretary.
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role, is_active")
@@ -66,63 +82,83 @@ export async function POST() {
     if (
       profileError ||
       !profile ||
-      !profile.is_active ||
+      profile.is_active !== true ||
       !["admin", "secretary"].includes(profile.role)
     ) {
       return NextResponse.json(
-        { error: "ليس لديك صلاحية إنشاء الحسابات." },
+        { error: "An active admin or secretary account is required." },
         { status: 403 }
       );
     }
 
+    // 5. Read the temporary password from server environment variables.
     const password = process.env.HEADS_TEMP_PASSWORD;
 
     if (!password || password.length < 10) {
       return NextResponse.json(
-        { error: "كلمة المرور المؤقتة غير مضبوطة على الخادم." },
+        { error: "Temporary password is missing or too short." },
         { status: 500 }
       );
     }
 
-    const results = [];
+    // 6. Check whether the test account already exists.
+    const { data: usersPage, error: listError } =
+      await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
 
-    for (const head of heads) {
-      const { data, error } =
-        await supabaseAdmin.auth.admin.createUser({
-          email: head.email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: head.email.split("@")[0],
-            committee: head.committee,
-          },
-        });
+    if (listError) {
+      return NextResponse.json(
+        { error: "Could not check existing accounts." },
+        { status: 500 }
+      );
+    }
 
-      if (error) {
-        results.push({
-          email: head.email,
-          committee: head.committee,
-          status: "failed",
-          reason: error.message,
-        });
-        continue;
-      }
+    const existingUser = usersPage.users.find(
+      (existing) =>
+        existing.email?.toLowerCase() ===
+        TEST_HEAD.email.toLowerCase()
+    );
 
-      results.push({
-        email: head.email,
-        committee: head.committee,
-        status: "created",
-        userId: data.user.id,
+    if (existingUser) {
+      return NextResponse.json({
+        message: "Account already exists; no changes were made.",
+        email: TEST_HEAD.email,
+        committee: TEST_HEAD.committee,
+        status: "already_exists",
       });
     }
 
+    // 7. Create the test account.
+    const { data, error: createError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: TEST_HEAD.email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: TEST_HEAD.email.split("@")[0],
+          committee: TEST_HEAD.committee,
+        },
+      });
+
+    if (createError) {
+      return NextResponse.json(
+        { error: createError.message },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({
-      message: "انتهت محاولة إنشاء الحسابات.",
-      results,
+      message:
+        "Test account created. Verify profiles and students before continuing.",
+      email: data.user.email,
+      committee: TEST_HEAD.committee,
+      status: "created",
     });
   } catch {
     return NextResponse.json(
-      { error: "حدث خطأ داخلي أثناء إنشاء الحسابات." },
+      { error: "Unexpected server error." },
       { status: 500 }
     );
   }
