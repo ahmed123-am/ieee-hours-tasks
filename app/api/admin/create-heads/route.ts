@@ -5,23 +5,30 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const TEST_HEAD = {
   email: "elawadlysara57@gmail.com",
   committee: "PROGRAMMING",
-};
+} as const;
+
+function jsonError(message: string, status: number) {
+  return NextResponse.json({ error: message }, { status });
+}
 
 export async function POST(request: Request) {
   try {
-    // 1. Verify setup token.
+    // 1. Validate the temporary setup token.
     const token = request.headers.get("x-heads-setup-token");
     const expectedToken = process.env.HEADS_SETUP_TOKEN;
 
-    if (!expectedToken || !token || token !== expectedToken) {
-      return NextResponse.json(
-        { error: "Unauthorized." },
-        { status: 401 }
-      );
+    if (
+      !expectedToken ||
+      !token ||
+      token.length !== expectedToken.length ||
+      token !== expectedToken
+    ) {
+      return jsonError("Unauthorized.", 401);
     }
 
     // 2. Validate public Supabase configuration.
@@ -30,13 +37,13 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
     if (!url || !publishableKey) {
-      return NextResponse.json(
-        { error: "Supabase configuration is missing." },
-        { status: 500 }
+      return jsonError(
+        "Supabase environment variables are missing.",
+        500
       );
     }
 
-    // 3. Create authenticated server client.
+    // 3. Read the current browser session from cookies.
     const cookieStore = await cookies();
 
     const supabase = createServerClient(url, publishableKey, {
@@ -50,26 +57,26 @@ export async function POST(request: Request) {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // Cookies can be read-only in some contexts.
+            // Some route contexts do not allow cookie writes.
           }
         },
       },
     });
 
-    // 4. Verify current user.
+    // 4. Require a valid signed-in user.
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: "Sign in with the admin account first." },
-        { status: 401 }
+      return jsonError(
+        "Sign in with the admin account first.",
+        401
       );
     }
 
-    // 5. Verify active admin/secretary role.
+    // 5. Verify the active admin/secretary role in the database.
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role, is_active")
@@ -82,23 +89,24 @@ export async function POST(request: Request) {
       profile.is_active !== true ||
       !["admin", "secretary"].includes(profile.role)
     ) {
-      return NextResponse.json(
-        { error: "An active admin or secretary is required." },
-        { status: 403 }
+      return jsonError(
+        "An active admin or secretary account is required.",
+        403
       );
     }
 
-    // 6. Read temporary password from server environment.
+    // 6. Read the temporary password only on the server.
     const password = process.env.HEADS_TEMP_PASSWORD;
 
     if (!password || password.length < 10) {
-      return NextResponse.json(
-        { error: "Temporary password configuration is missing or invalid." },
-        { status: 500 }
+      return jsonError(
+        "Temporary password configuration is missing or invalid.",
+        500
       );
     }
 
-    // 7. Find existing account. Do not reset or overwrite it.
+    // 7. Check whether the account already exists.
+    // Never overwrite its password or modify an existing account.
     const { data: usersPage, error: listError } =
       await supabaseAdmin.auth.admin.listUsers({
         page: 1,
@@ -106,15 +114,16 @@ export async function POST(request: Request) {
       });
 
     if (listError) {
-      return NextResponse.json(
-        { error: "Could not check existing accounts." },
-        { status: 500 }
+      return jsonError(
+        "Could not check existing accounts.",
+        500
       );
     }
 
     const existingUser = usersPage.users.find(
       (item) =>
-        item.email?.toLowerCase() === TEST_HEAD.email.toLowerCase()
+        item.email?.toLowerCase() ===
+        TEST_HEAD.email.toLowerCase()
     );
 
     if (existingUser) {
@@ -122,12 +131,11 @@ export async function POST(request: Request) {
         status: "already_exists",
         email: TEST_HEAD.email,
         message:
-          "The Auth account already exists. No password or profile was changed.",
+          "The Auth account already exists. No changes were made.",
       });
     }
 
-    // 8. Create the test account.
-    // The handle_new_user trigger should create profiles and students.
+    // 8. Create only the designated test Head.
     const { data: created, error: createError } =
       await supabaseAdmin.auth.admin.createUser({
         email: TEST_HEAD.email,
@@ -140,13 +148,13 @@ export async function POST(request: Request) {
       });
 
     if (createError || !created.user) {
-      return NextResponse.json(
-        { error: createError?.message ?? "Account creation failed." },
-        { status: 400 }
+      return jsonError(
+        createError?.message ?? "Account creation failed.",
+        400
       );
     }
 
-    // 9. Verify profile created by the database trigger.
+    // 9. Verify the database trigger created the profile.
     const { data: newProfile, error: newProfileError } =
       await supabaseAdmin
         .from("profiles")
@@ -160,13 +168,13 @@ export async function POST(request: Request) {
           status: "created_but_verification_failed",
           email: TEST_HEAD.email,
           message:
-            "Auth account was created, but its profile could not be verified. Do not retry creation; inspect the database first.",
+            "The Auth account was created, but its profile could not be verified. Do not retry; inspect the database first.",
         },
         { status: 500 }
       );
     }
 
-    // 10. Verify student record.
+    // 10. Verify the student record.
     const { data: newStudent, error: studentError } =
       await supabaseAdmin
         .from("students")
@@ -180,13 +188,13 @@ export async function POST(request: Request) {
           status: "created_but_verification_failed",
           email: TEST_HEAD.email,
           message:
-            "Auth and profile exist, but the student record could not be verified. Do not retry creation; inspect the database first.",
+            "The Auth account and profile exist, but the student record could not be verified. Do not retry; inspect the database first.",
         },
         { status: 500 }
       );
     }
 
-    // 11. Confirm the actual assigned role and committee.
+    // 11. Confirm the actual role, committee and active status.
     if (
       newProfile.role !== "head" ||
       newProfile.committee !== TEST_HEAD.committee ||
@@ -199,6 +207,7 @@ export async function POST(request: Request) {
           email: TEST_HEAD.email,
           profileRole: newProfile.role,
           profileCommittee: newProfile.committee,
+          profileActive: newProfile.is_active,
           studentCommittee: newStudent.committee,
           message:
             "The account exists, but its role or committee is incorrect. Do not retry creation.",
@@ -207,6 +216,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // 12. Return a success response only after all checks pass.
     return NextResponse.json({
       status: "created_and_verified",
       email: TEST_HEAD.email,
@@ -216,9 +226,6 @@ export async function POST(request: Request) {
       studentVerified: true,
     });
   } catch {
-    return NextResponse.json(
-      { error: "Unexpected server error." },
-      { status: 500 }
-    );
+    return jsonError("Unexpected server error.", 500);
   }
 }
