@@ -97,9 +97,7 @@ export default function RegisterPage() {
       }
 
       if (!data.user) {
-        setError(
-          "لم يرجع نظام التسجيل بيانات الحساب. حاول مرة أخرى."
-        );
+        setError("لم يرجع نظام التسجيل بيانات الحساب. حاول مرة أخرى.");
         return;
       }
 
@@ -169,13 +167,10 @@ export default function RegisterPage() {
         </p>
 
         <form onSubmit={handleRegister} className="login-form">
-          <label htmlFor="register-full-name">
-            الاسم الكامل
-          </label>
+          <label htmlFor="register-full-name">الاسم الكامل</label>
 
           <div className="login-input-wrap">
             <UserRound size={19} />
-
             <input
               id="register-full-name"
               name="full_name"
@@ -191,11 +186,9 @@ export default function RegisterPage() {
             />
           </div>
 
-          <label htmlFor="register-committee">
-            اختار اللجنة
-          </label>
+          <label htmlFor="register-committee">اختار اللجنة</label>
 
-          <div className="login-input-wrap">
+          <div className="login-input-wrap committee-input-wrap">
             <Building2 size={19} />
 
             <select
@@ -207,52 +200,22 @@ export default function RegisterPage() {
               }
               required
               disabled={loading}
-              style={{
-                backgroundColor: "#0b1425",
-                color: "#e5edf8",
-                border: "none",
-                outline: "none",
-                colorScheme: "dark",
-                width: "100%",
-                minWidth: 0,
-                padding: "12px",
-                borderRadius: "8px",
-                fontSize: "16px",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
+              className="committee-select"
             >
-              <option
-                value=""
-                style={{
-                  backgroundColor: "#111c30",
-                  color: "#94a3b8",
-                }}
-              >
-                -- اختار اللجنة --
-              </option>
+              <option value="">-- اختار اللجنة --</option>
 
               {COMMITTEES.map((item) => (
-                <option
-                  key={item}
-                  value={item}
-                  style={{
-                    backgroundColor: "#111c30",
-                    color: "#e5edf8",
-                  }}
-                >
+                <option key={item} value={item}>
                   {item}
                 </option>
               ))}
             </select>
           </div>
 
-          <label htmlFor="register-email">
-            البريد الإلكتروني
-          </label>
+          <label htmlFor="register-email">البريد الإلكتروني</label>
 
           <div className="login-input-wrap">
             <Mail size={19} />
-
             <input
               id="register-email"
               name="email"
@@ -266,13 +229,10 @@ export default function RegisterPage() {
             />
           </div>
 
-          <label htmlFor="register-password">
-            كلمة المرور
-          </label>
+          <label htmlFor="register-password">كلمة المرور</label>
 
           <div className="login-input-wrap">
             <Lock size={19} />
-
             <input
               id="register-password"
               name="password"
@@ -293,7 +253,6 @@ export default function RegisterPage() {
 
           <div className="login-input-wrap">
             <Lock size={19} />
-
             <input
               id="confirm-password"
               name="confirm-password"
