@@ -111,7 +111,7 @@ export default function StudentsPage() {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role, is_active")
+      .select("role, is_active, role_approved, approval_status")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -126,7 +126,14 @@ export default function StudentsPage() {
     const allowed =
       !profileError &&
       profile?.is_active === true &&
-      ["admin", "secretary"].includes(profile.role);
+      (
+        ["admin", "secretary"].includes(profile.role) ||
+        (
+          profile.role === "board" &&
+          profile.role_approved === true &&
+          profile.approval_status === "approved"
+        )
+      );
 
     setCanManage(allowed);
     setCheckingAccess(false);
@@ -253,7 +260,7 @@ export default function StudentsPage() {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role, is_active")
+      .select("role, is_active, role_approved, approval_status")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -264,12 +271,18 @@ export default function StudentsPage() {
       profileError: profileError?.message ?? null,
     });
 
-    if (
-      profileError ||
-      !profile ||
-      profile.is_active !== true ||
-      !["admin", "secretary"].includes(profile.role)
-    ) {
+    const canSaveStudent =
+      profile?.is_active === true &&
+      (
+        ["admin", "secretary"].includes(profile.role) ||
+        (
+          profile.role === "board" &&
+          profile.role_approved === true &&
+          profile.approval_status === "approved"
+        )
+      );
+
+    if (profileError || !profile || !canSaveStudent) {
       setError(
         profileError
           ? `${t("تعذر التحقق من الصلاحيات: ", "Could not verify permissions: ")}${profileError.message}`
