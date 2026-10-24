@@ -17,37 +17,65 @@ export default function LoginPage() {
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (loading) return;
 
     setLoading(true);
     setError("");
 
-    try {
-      const supabase = createClient();
+    const supabase = createClient();
 
+    try {
       const { data, error: loginError } =
         await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
 
-      if (loginError) {
-        console.error("Login error:", loginError.message);
-        setError(loginError.message);
+      if (loginError || !data.user) {
+        setError(
+          loginError?.message || "تعذر تسجيل الدخول. حاول مرة أخرى."
+        );
         return;
       }
 
-      if (!data.user) {
-        setError("لم يتم العثور على بيانات المستخدم بعد تسجيل الدخول.");
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role, is_active, approval_status, role_approved")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        setError(
+          `تم تسجيل الدخول، لكن تعذر التحقق من صلاحيات الحساب: ${profileError.message}`
+        );
+        await supabase.auth.signOut();
         return;
       }
 
-       window.location.replace("/");
-       
+      if (!profile) {
+        setError("لم يتم العثور على ملف الحساب. تواصل مع مسؤول الفرع.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      const legacyStaff = ["admin", "secretary"].includes(profile.role);
+      const approvedMember =
+        ["board", "head", "volunteer"].includes(profile.role) &&
+        profile.role_approved === true &&
+        profile.approval_status === "approved";
+
+      if (!profile.is_active || (!legacyStaff && !approvedMember)) {
+        await supabase.auth.signOut();
+        setError(
+          "حسابك غير معتمد أو موقوف حاليًا. تواصل مع مسؤول الفرع."
+        );
+        return;
+      }
+
+      // Full navigation ensures the server reads the latest auth cookies.
+      window.location.assign("/");
     } catch (err: unknown) {
-      console.error("Unexpected login error:", err);
-
+      console.error("Login error:", err);
       setError(
         err instanceof Error
           ? err.message
@@ -72,15 +100,11 @@ export default function LoginPage() {
           سجّل دخولك للوصول إلى لوحة إدارة ساعات ومهام الطلاب.
         </p>
 
-        <form
-          onSubmit={handleLogin}
-          className="login-form"
-        >
+        <form onSubmit={handleLogin} className="login-form">
           <label htmlFor="email">البريد الإلكتروني</label>
 
           <div className="login-input-wrap">
             <Mail size={19} />
-
             <input
               id="email"
               name="email"
@@ -98,7 +122,6 @@ export default function LoginPage() {
 
           <div className="login-input-wrap">
             <Lock size={19} />
-
             <input
               id="password"
               name="password"
@@ -125,7 +148,6 @@ export default function LoginPage() {
 
         <div className="login-register">
           <span>ليس لديك حساب؟</span>
-
           <Link href="/register" className="register-link">
             <UserPlus size={17} />
             إنشاء حساب جديد
@@ -133,7 +155,7 @@ export default function LoginPage() {
         </div>
 
         <p className="login-note">
-          الدخول مخصص للأعضاء المصرح لهم فقط.
+          الدخول مخصص للأعضاء المعتمدين فقط.
         </p>
       </section>
     </main>
