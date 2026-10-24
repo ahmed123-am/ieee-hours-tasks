@@ -27,11 +27,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] =
+    useState(false);
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setSuccess(false);
 
     const cleanName = fullName.trim();
     const cleanEmail = email.trim().toLowerCase();
@@ -56,22 +57,35 @@ export default function RegisterPage() {
     try {
       const supabase = createClient();
 
-      const { error: registerError } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            full_name: cleanName,
-            requested_role: role,
+      const { data, error: registerError } =
+        await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              full_name: cleanName,
+              requested_role: role,
+            },
           },
-        },
-      });
+        });
 
       if (registerError) {
-        setError(registerError.message);
+        setError(
+          registerError.message === "User already registered"
+            ? "البريد الإلكتروني مسجل بالفعل. جرّب تسجيل الدخول."
+            : registerError.message
+        );
         return;
       }
 
+      if (!data.user) {
+        setError(
+          "لم يرجع نظام التسجيل بيانات الحساب. حاول مرة أخرى."
+        );
+        return;
+      }
+
+      setNeedsEmailConfirmation(!data.session);
       setSuccess(true);
     } catch {
       setError("حصل خطأ أثناء إنشاء الحساب. حاول مرة أخرى.");
@@ -88,21 +102,27 @@ export default function RegisterPage() {
             <CheckCircle2 size={32} />
           </div>
 
-          <h1>تم إرسال طلب التسجيل</h1>
+          <h1>تم إنشاء طلب التسجيل بنجاح</h1>
 
           <p className="login-description">
-            أهلًا يا {fullName.trim()}! تم إرسال طلب إنشاء حسابك.
-            إذا كان تأكيد البريد الإلكتروني مفعّلًا، افتح بريدك
-            واتبع رابط التأكيد.
+            أهلًا يا {fullName.trim()}، تم إرسال طلب التسجيل
+            بالبريد الإلكتروني: {email.trim().toLowerCase()}
           </p>
+
+          {needsEmailConfirmation && (
+            <p className="login-note">
+              افتح بريدك الإلكتروني واضغط على رابط تأكيد الحساب
+              إذا وصلتك رسالة التأكيد.
+            </p>
+          )}
 
           <p className="login-description">
             الدور المطلوب: <strong>{role.toUpperCase()}</strong>
           </p>
 
           <p className="login-note">
-            اختيار الدور لا يمنح صلاحياته تلقائيًا. انتظر موافقة
-            الـ Board قبل استخدام الحساب.
+            حسابك يحتاج إلى موافقة الـ Board قبل تفعيل صلاحياته.
+            لا تحاول الدخول للوحة التحكم قبل الاعتماد.
           </p>
 
           <Link href="/login" className="register-back">
