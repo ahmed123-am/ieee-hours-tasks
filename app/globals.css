@@ -2727,3 +2727,38 @@ nextjs-portal {
   opacity: 0.65;
 }
 
+/* Dark committee selector */
+.login-input-wrap.committee-input-wrap {
+  background: #0b1323 !important;
+  border: 1px solid #29374d !important;
+  color: #94a3b8;
+}
+
+.login-input-wrap.committee-input-wrap:focus-within {
+  border-color: #00629b !important;
+  box-shadow: 0 0 0 3px rgba(0, 98, 155, 0.15);
+}
+
+.login-input-wrap .committee-select {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none !important;
+  outline: none;
+  background: #0b1323 !important;
+  color: #e5edf8 !important;
+  color-scheme: dark;
+  font: inherit;
+  cursor: pointer;
+}
+
+.login-input-wrap .committee-select option {
+  background: #111b2e !important;
+  color: #e5edf8 !important;
+}
+
+.login-input-wrap .committee-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
