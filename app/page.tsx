@@ -28,7 +28,7 @@ async function DashboardAccess() {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("role, is_active, approval_status, role_approved")
+    .select("is_active")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -38,7 +38,7 @@ async function DashboardAccess() {
     return (
       <main className="p-6" dir="rtl">
         <h1 className="text-xl font-bold">
-          تعذر التحقق من صلاحيات الحساب
+          تعذر التحقق من حالة الحساب
         </h1>
         <p className="mt-2">
           تعذر قراءة بيانات الحساب. حاول مرة أخرى، وإذا استمرت المشكلة
@@ -48,18 +48,8 @@ async function DashboardAccess() {
     );
   }
 
-  if (!profile || !profile.is_active) {
-    redirect("/login");
-  }
-
-  const legacyStaff = ["admin", "secretary"].includes(profile.role);
-
-  const approvedMember =
-    ["board", "head", "volunteer"].includes(profile.role) &&
-    profile.role_approved === true &&
-    profile.approval_status === "approved";
-
-  if (!legacyStaff && !approvedMember) {
+  if (!profile || profile.is_active !== true) {
+    await supabase.auth.signOut();
     redirect("/login");
   }
 

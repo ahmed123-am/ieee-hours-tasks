@@ -9,21 +9,30 @@ import {
   Lock,
   CheckCircle2,
   ArrowRight,
-  ShieldCheck,
   Users,
-  HandHelping,
   UserRound,
+  Building2,
 } from "lucide-react";
 import { createClient } from "../../lib/supabase/client";
 
-type AccountRole = "board" | "head" | "volunteer";
+const COMMITTEES = [
+  "CORE",
+  "HR",
+  "PR",
+  "LOGISTICS",
+  "PROGRAMMING",
+  "MEDIA",
+] as const;
+
+type Committee = (typeof COMMITTEES)[number];
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [committee, setCommittee] = useState<Committee | "">("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<AccountRole>("volunteer");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -32,6 +41,9 @@ export default function RegisterPage() {
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (loading) return;
+
     setError("");
 
     const cleanName = fullName.trim();
@@ -39,6 +51,11 @@ export default function RegisterPage() {
 
     if (cleanName.length < 3) {
       setError("اكتب اسمك الكامل، ويجب ألا يقل عن 3 أحرف.");
+      return;
+    }
+
+    if (!committee || !COMMITTEES.includes(committee)) {
+      setError("اختار اللجنة اللي هتنضم ليها.");
       return;
     }
 
@@ -64,7 +81,8 @@ export default function RegisterPage() {
           options: {
             data: {
               full_name: cleanName,
-              requested_role: role,
+              committee,
+              requested_role: "volunteer",
             },
           },
         });
@@ -79,15 +97,14 @@ export default function RegisterPage() {
       }
 
       if (!data.user) {
-        setError(
-          "لم يرجع نظام التسجيل بيانات الحساب. حاول مرة أخرى."
-        );
+        setError("لم يرجع نظام التسجيل بيانات الحساب. حاول مرة أخرى.");
         return;
       }
 
       setNeedsEmailConfirmation(!data.session);
       setSuccess(true);
-    } catch {
+    } catch (err: unknown) {
+      console.error("Registration error:", err);
       setError("حصل خطأ أثناء إنشاء الحساب. حاول مرة أخرى.");
     } finally {
       setLoading(false);
@@ -102,11 +119,16 @@ export default function RegisterPage() {
             <CheckCircle2 size={32} />
           </div>
 
-          <h1>تم إنشاء طلب التسجيل بنجاح</h1>
+          <h1>تم إنشاء الحساب بنجاح</h1>
 
           <p className="login-description">
-            أهلًا يا {fullName.trim()}، تم إرسال طلب التسجيل
-            بالبريد الإلكتروني: {email.trim().toLowerCase()}
+            أهلًا يا {fullName.trim()}، تم تسجيل طلبك باستخدام البريد:
+            {" "}
+            {email.trim().toLowerCase()}
+          </p>
+
+          <p className="login-description">
+            اللجنة المختارة: <strong>{committee}</strong>
           </p>
 
           {needsEmailConfirmation && (
@@ -116,17 +138,13 @@ export default function RegisterPage() {
             </p>
           )}
 
-          <p className="login-description">
-            الدور المطلوب: <strong>{role.toUpperCase()}</strong>
-          </p>
-
           <p className="login-note">
-            حسابك يحتاج إلى موافقة الـ Board قبل تفعيل صلاحياته.
-            لا تحاول الدخول للوحة التحكم قبل الاعتماد.
+            نوع الحساب الافتراضي هو Volunteer. اختيار اللجنة لا يمنح
+            صلاحيات إدارية.
           </p>
 
           <Link href="/login" className="register-back">
-            العودة إلى تسجيل الدخول
+            الانتقال إلى تسجيل الدخول
           </Link>
         </section>
       </main>
@@ -145,8 +163,7 @@ export default function RegisterPage() {
         <h1>إنشاء حساب جديد</h1>
 
         <p className="login-description">
-          اكتب اسمك الكامل واختر نوع الحساب المطلوب.
-          سيعتمد الـ Board الحساب قبل تفعيل الصلاحيات.
+          اكتب بياناتك واختار اللجنة اللي حابب تنضم ليها.
         </p>
 
         <form onSubmit={handleRegister} className="login-form">
@@ -165,62 +182,33 @@ export default function RegisterPage() {
               minLength={3}
               maxLength={100}
               required
+              disabled={loading}
             />
           </div>
 
-          <label>نوع الحساب</label>
+          <label htmlFor="register-committee">اختار اللجنة</label>
 
-          <div className="register-role-options">
-            <label
-              className={`register-role-option ${
-                role === "board" ? "selected" : ""
-              }`}
-            >
-              <input
-                type="radio"
-                name="account-role"
-                value="board"
-                checked={role === "board"}
-                onChange={() => setRole("board")}
-              />
-              <ShieldCheck size={22} />
-              <span>Board</span>
-              <small>عضو مجلس الإدارة</small>
-            </label>
+          <div className="login-input-wrap">
+            <Building2 size={19} />
 
-            <label
-              className={`register-role-option ${
-                role === "head" ? "selected" : ""
-              }`}
+            <select
+              id="register-committee"
+              name="committee"
+              value={committee}
+              onChange={(event) =>
+                setCommittee(event.target.value as Committee | "")
+              }
+              required
+              disabled={loading}
             >
-              <input
-                type="radio"
-                name="account-role"
-                value="head"
-                checked={role === "head"}
-                onChange={() => setRole("head")}
-              />
-              <Users size={22} />
-              <span>Head</span>
-              <small>رئيس لجنة</small>
-            </label>
+              <option value="">-- اختار اللجنة --</option>
 
-            <label
-              className={`register-role-option ${
-                role === "volunteer" ? "selected" : ""
-              }`}
-            >
-              <input
-                type="radio"
-                name="account-role"
-                value="volunteer"
-                checked={role === "volunteer"}
-                onChange={() => setRole("volunteer")}
-              />
-              <HandHelping size={22} />
-              <span>Volunteer</span>
-              <small>متطوع</small>
-            </label>
+              {COMMITTEES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
           </div>
 
           <label htmlFor="register-email">البريد الإلكتروني</label>
@@ -236,6 +224,7 @@ export default function RegisterPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
+              disabled={loading}
             />
           </div>
 
@@ -253,6 +242,7 @@ export default function RegisterPage() {
               onChange={(event) => setPassword(event.target.value)}
               minLength={8}
               required
+              disabled={loading}
             />
           </div>
 
@@ -269,9 +259,12 @@ export default function RegisterPage() {
               autoComplete="new-password"
               placeholder="أعد كتابة كلمة المرور"
               value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
+              onChange={(event) =>
+                setConfirmPassword(event.target.value)
+              }
               minLength={8}
               required
+              disabled={loading}
             />
           </div>
 
@@ -282,12 +275,13 @@ export default function RegisterPage() {
           )}
 
           <button type="submit" disabled={loading}>
-            {loading ? "جارٍ إنشاء الحساب..." : "إرسال طلب التسجيل"}
+            {loading ? "جارٍ إنشاء الحساب..." : "إنشاء حساب"}
           </button>
         </form>
 
         <div className="login-register">
           <span>عندك حساب بالفعل؟</span>
+
           <Link href="/login" className="register-link">
             <ArrowRight size={17} />
             تسجيل الدخول
@@ -295,7 +289,8 @@ export default function RegisterPage() {
         </div>
 
         <p className="login-note">
-          IEEE NDETI — صلاحيات الحساب لا تُمنح إلا بعد اعتمادها.
+          <Users size={15} className="inline-block ml-1" />
+          IEEE NDETI — ساعات ومهام الطلاب.
         </p>
       </section>
     </main>
