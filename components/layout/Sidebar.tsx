@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -16,7 +17,21 @@ import {
 
 import { useLanguage } from "../LanguageProvider";
 
-type AccountRole = "admin" | "board" | "head" | "volunteer" | "student";
+type AccountRole =
+  | "admin"
+  | "secretary"
+  | "board"
+  | "head"
+  | "volunteer"
+  | "student";
+
+type UserProfile = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: AccountRole;
+  committee: string | null;
+};
 
 type NavigationItem = {
   label: string;
@@ -29,14 +44,65 @@ export default function Sidebar() {
   const isArabic = language === "ar";
   const pathname = usePathname();
 
-  /*
-   * مبدئيًا نعرض القائمة المشتركة فقط.
-   * الدور يجب أن يأتي من profile موثوق من السيرفر،
-   * وليس من اختيار المستخدم أو localStorage.
-   *
-   * الخطوة التالية ستوصل الدور الفعلي هنا.
-   */
-  const role: AccountRole = "admin";
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const response = await fetch("/api/profile", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to load user profile");
+        }
+
+        const data = await response.json();
+        const userProfile = data.profile ?? data;
+
+        const validRoles: AccountRole[] = [
+          "admin",
+          "secretary",
+          "board",
+          "head",
+          "volunteer",
+          "student",
+        ];
+
+        if (
+          !userProfile ||
+          !validRoles.includes(userProfile.role)
+        ) {
+          throw new Error("Invalid profile");
+        }
+
+        if (!cancelled) {
+          setProfile(userProfile as UserProfile);
+        }
+      } catch (error) {
+        console.error("Sidebar profile error:", error);
+
+        if (!cancelled) {
+          setProfile(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const allNavigation: NavigationItem[] = [
     {
@@ -71,18 +137,24 @@ export default function Sidebar() {
     },
   ];
 
+  const role = profile?.role;
+
   const navigation =
-    role === "admin" || role === "board"
+    role === "admin" || role === "secretary" || role === "board"
       ? allNavigation
       : role === "head"
         ? allNavigation.filter((item) =>
-            ["/", "/tasks", "/sessions", "/hours"].includes(item.href)
+            ["/", "/tasks", "/sessions", "/hours"].includes(
+              item.href
+            )
           )
         : role === "volunteer" || role === "student"
           ? allNavigation.filter((item) =>
-              ["/", "/tasks", "/hours", "/sessions"].includes(item.href)
+              ["/", "/tasks", "/hours", "/sessions"].includes(
+                item.href
+              )
             )
-          : allNavigation.filter((item) => item.href === "/");
+          : [];
 
   function closeSidebar() {
     document.body.classList.remove("sidebar-open");
@@ -123,27 +195,33 @@ export default function Sidebar() {
         </div>
 
         <nav className="sidebar-nav">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
+          {loading ? (
+            <p className="sidebar-loading">
+              {isArabic ? "جاري تحميل القائمة..." : "Loading menu..."}
+            </p>
+          ) : (
+            navigation.map((item) => {
+              const Icon = item.icon;
+              const active =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`sidebar-link ${active ? "active" : ""}`}
-                aria-current={active ? "page" : undefined}
-                onClick={closeSidebar}
-              >
-                <Icon size={20} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`sidebar-link ${active ? "active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  onClick={closeSidebar}
+                >
+                  <Icon size={20} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })
+          )}
         </nav>
 
         <div className="sidebar-bottom">
@@ -156,7 +234,8 @@ export default function Sidebar() {
               {isArabic ? "ساعات ومهام IEEE" : "IEEE Hours & Tasks"}
             </strong>
             <p>
-              {isArabic ? "إدارة الطلاب" : "Student Management"}
+              {profile?.committee ??
+                (isArabic ? "إدارة الطلاب" : "Student Management")}
             </p>
           </div>
         </div>
