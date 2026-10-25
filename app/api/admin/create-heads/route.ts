@@ -43,7 +43,11 @@ const TARGETS = [
   },
 ] as const;
 
-function fail(error: string, status = 400, extra?: object) {
+function fail(
+  error: string,
+  status = 400,
+  extra?: Record<string, unknown>
+) {
   return NextResponse.json(
     { success: false, error, ...extra },
     { status }
@@ -56,7 +60,6 @@ function safeDbError(error: {
   details?: string;
   hint?: string;
 }) {
-  // Never return keys, tokens, or request headers.
   return {
     code: error.code ?? null,
     message: error.message,
@@ -100,23 +103,20 @@ export async function POST(request: Request) {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // Cookie writes may not be available in every server context.
+            // Cookie writes may be unavailable in some server contexts.
           }
         },
       },
     });
 
-    // Authenticate the caller using the current website session.
+    // Require the designated admin's authenticated website session.
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return fail(
-        "Sign in to the website with the designated admin account first.",
-        401
-      );
+      return fail("Sign in with the designated admin account first.", 401);
     }
 
     if (
@@ -126,32 +126,47 @@ export async function POST(request: Request) {
       return fail("This session is not the designated admin account.", 403);
     }
 
-    // Verify all five Auth accounts before changing database records.
+    // Read-only diagnostic: checks whether the admin client can access profiles.
+    const { error: accessError } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .limit(1);
+
+    if (accessError) {
+      const databaseError = safeDbError(accessError);
+
+      console.error("Supabase admin client check failed:", databaseError);
+
+      return fail("Supabase admin client check failed.", 500, {
+        stage: "admin_client_check",
+        databaseError,
+      });
+    }
+
+    // Validate all Auth users before writing to either table.
     for (const target of TARGETS) {
       const { data, error } =
         await supabaseAdmin.auth.admin.getUserById(target.id);
 
       if (error || !data.user) {
-        return fail(
-          `Auth account not found for ${target.email}.`,
-          400,
-          { authError: error ? safeDbError(error) : null }
-        );
+        return fail(`Auth account not found for ${target.email}.`, 400, {
+          stage: "auth_verification",
+          databaseError: error ? safeDbError(error) : null,
+        });
       }
 
       if (
         data.user.email?.toLowerCase() !== target.email.toLowerCase()
       ) {
-        return fail(`Auth ID/email mismatch for ${target.email}.`, 400);
+        return fail(`Auth ID/email mismatch for ${target.email}.`, 400, {
+          stage: "auth_verification",
+        });
       }
     }
 
     const results: string[] = [];
 
     for (const target of TARGETS) {
-      const now = new Date().toISOString();
-
-      // Save the role using the server-only admin client.
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
         .upsert(
@@ -164,27 +179,26 @@ export async function POST(request: Request) {
             approval_status: "approved",
             role_approved: true,
             requested_role: null,
-            updated_at: now,
+            updated_at: new Date().toISOString(),
           },
           { onConflict: "id" }
         );
 
       if (profileError) {
-        const dbError = safeDbError(profileError);
+        const databaseError = safeDbError(profileError);
 
         console.error("Profile upsert failed:", {
           email: target.email,
-          ...dbError,
+          ...databaseError,
         });
 
-        return fail(
-          `Could not save profile for ${target.email}.`,
-          500,
-          { databaseError: dbError }
-        );
+        return fail(`Could not save profile for ${target.email}.`, 500, {
+          stage: "profile_upsert",
+          databaseError,
+        });
       }
 
-      // Check whether the student record already exists.
+      // Check whether a student row exists, preserving hours and committee.
       const { data: existingStudent, error: studentReadError } =
         await supabaseAdmin
           .from("students")
@@ -193,22 +207,20 @@ export async function POST(request: Request) {
           .maybeSingle();
 
       if (studentReadError) {
-        const dbError = safeDbError(studentReadError);
+        const databaseError = safeDbError(studentReadError);
 
         console.error("Student lookup failed:", {
           email: target.email,
-          ...dbError,
+          ...databaseError,
         });
 
-        return fail(
-          `Could not check student record for ${target.email}.`,
-          500,
-          { databaseError: dbError }
-        );
+        return fail(`Could not check student record for ${target.email}.`, 500, {
+          stage: "student_lookup",
+          databaseError,
+        });
       }
 
       if (existingStudent) {
-        // Keep the student's existing total_hours and committee.
         const { error: studentUpdateError } = await supabaseAdmin
           .from("students")
           .update({
@@ -218,18 +230,17 @@ export async function POST(request: Request) {
           .eq("id", target.id);
 
         if (studentUpdateError) {
-          const dbError = safeDbError(studentUpdateError);
+          const databaseError = safeDbError(studentUpdateError);
 
           console.error("Student update failed:", {
             email: target.email,
-            ...dbError,
+            ...databaseError,
           });
 
-          return fail(
-            `Could not update student record for ${target.email}.`,
-            500,
-            { databaseError: dbError }
-          );
+          return fail(`Could not update student record for ${target.email}.`, 500, {
+            stage: "student_update",
+            databaseError,
+          });
         }
       } else {
         const { error: studentInsertError } = await supabaseAdmin
@@ -242,55 +253,46 @@ export async function POST(request: Request) {
           });
 
         if (studentInsertError) {
-          const dbError = safeDbError(studentInsertError);
+          const databaseError = safeDbError(studentInsertError);
 
           console.error("Student insert failed:", {
             email: target.email,
-            ...dbError,
+            ...databaseError,
           });
 
-          return fail(
-            `Could not create student record for ${target.email}.`,
-            500,
-            { databaseError: dbError }
-          );
+          return fail(`Could not create student record for ${target.email}.`, 500, {
+            stage: "student_insert",
+            databaseError,
+          });
         }
       }
 
       results.push(`${target.email}: ${target.role}`);
     }
 
-    // Verify the five expected profiles and roles.
-    const { data: savedProfiles, error: verifyError } =
-      await supabaseAdmin
-        .from("profiles")
-        .select("id,email,role,is_active")
-        .in(
-          "id",
-          TARGETS.map((target) => target.id)
-        );
+    // Verify the resulting profile rows and role assignments.
+    const { data: savedProfiles, error: verifyError } = await supabaseAdmin
+      .from("profiles")
+      .select("id,email,role,is_active")
+      .in("id", TARGETS.map((target) => target.id));
 
     if (verifyError) {
-      const dbError = safeDbError(verifyError);
+      const databaseError = safeDbError(verifyError);
 
-      console.error("Profile verification failed:", dbError);
+      console.error("Profile verification failed:", databaseError);
 
-      return fail(
-        "Could not verify saved profiles.",
-        500,
-        { databaseError: dbError }
-      );
+      return fail("Could not verify saved profiles.", 500, {
+        stage: "profile_verification",
+        databaseError,
+      });
     }
 
     if (!savedProfiles || savedProfiles.length !== TARGETS.length) {
-      return fail(
-        "Not all five profiles were found after setup.",
-        500,
-        {
-          expected: TARGETS.length,
-          found: savedProfiles?.length ?? 0,
-        }
-      );
+      return fail("Not all five profiles were found after setup.", 500, {
+        stage: "profile_verification",
+        expected: TARGETS.length,
+        found: savedProfiles?.length ?? 0,
+      });
     }
 
     for (const target of TARGETS) {
@@ -304,7 +306,9 @@ export async function POST(request: Request) {
         saved.role !== target.role ||
         saved.is_active !== true
       ) {
-        return fail(`Role verification failed for ${target.email}.`, 500);
+        return fail(`Role verification failed for ${target.email}.`, 500, {
+          stage: "role_verification",
+        });
       }
     }
 
@@ -316,6 +320,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Setup roles failed:", error);
-    return fail("Unexpected server error. Check the server logs.", 500);
+
+    return fail("Unexpected server error. Check the server logs.", 500, {
+      stage: "unexpected_error",
+    });
   }
 }
