@@ -43,8 +43,26 @@ const TARGETS = [
   },
 ] as const;
 
-function fail(error: string, status = 400) {
-  return NextResponse.json({ success: false, error }, { status });
+function fail(error: string, status = 400, extra?: object) {
+  return NextResponse.json(
+    { success: false, error, ...extra },
+    { status }
+  );
+}
+
+function safeDbError(error: {
+  code?: string;
+  message: string;
+  details?: string;
+  hint?: string;
+}) {
+  // Never return keys, tokens, or request headers.
+  return {
+    code: error.code ?? null,
+    message: error.message,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+  };
 }
 
 export async function POST(request: Request) {
@@ -82,20 +100,23 @@ export async function POST(request: Request) {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // Cookies may be read-only in some server contexts.
+            // Cookie writes may not be available in every server context.
           }
         },
       },
     });
 
-    // Require a real signed-in session for the exact bootstrap admin.
+    // Authenticate the caller using the current website session.
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return fail("Sign in to the website with the admin account first.", 401);
+      return fail(
+        "Sign in to the website with the designated admin account first.",
+        401
+      );
     }
 
     if (
@@ -105,16 +126,22 @@ export async function POST(request: Request) {
       return fail("This session is not the designated admin account.", 403);
     }
 
-    // Verify every Auth account before changing either table.
+    // Verify all five Auth accounts before changing database records.
     for (const target of TARGETS) {
       const { data, error } =
         await supabaseAdmin.auth.admin.getUserById(target.id);
 
       if (error || !data.user) {
-        return fail(`Auth account not found for ${target.email}.`, 400);
+        return fail(
+          `Auth account not found for ${target.email}.`,
+          400,
+          { authError: error ? safeDbError(error) : null }
+        );
       }
 
-      if (data.user.email?.toLowerCase() !== target.email.toLowerCase()) {
+      if (
+        data.user.email?.toLowerCase() !== target.email.toLowerCase()
+      ) {
         return fail(`Auth ID/email mismatch for ${target.email}.`, 400);
       }
     }
@@ -124,6 +151,7 @@ export async function POST(request: Request) {
     for (const target of TARGETS) {
       const now = new Date().toISOString();
 
+      // Save the role using the server-only admin client.
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
         .upsert(
@@ -142,13 +170,21 @@ export async function POST(request: Request) {
         );
 
       if (profileError) {
+        const dbError = safeDbError(profileError);
+
+        console.error("Profile upsert failed:", {
+          email: target.email,
+          ...dbError,
+        });
+
         return fail(
-          `Could not save profile for ${target.email}: ${profileError.message}`,
-          500
+          `Could not save profile for ${target.email}.`,
+          500,
+          { databaseError: dbError }
         );
       }
 
-      // Preserve existing student hours and committee.
+      // Check whether the student record already exists.
       const { data: existingStudent, error: studentReadError } =
         await supabaseAdmin
           .from("students")
@@ -157,13 +193,22 @@ export async function POST(request: Request) {
           .maybeSingle();
 
       if (studentReadError) {
+        const dbError = safeDbError(studentReadError);
+
+        console.error("Student lookup failed:", {
+          email: target.email,
+          ...dbError,
+        });
+
         return fail(
-          `Could not check student record for ${target.email}: ${studentReadError.message}`,
-          500
+          `Could not check student record for ${target.email}.`,
+          500,
+          { databaseError: dbError }
         );
       }
 
       if (existingStudent) {
+        // Keep the student's existing total_hours and committee.
         const { error: studentUpdateError } = await supabaseAdmin
           .from("students")
           .update({
@@ -173,9 +218,17 @@ export async function POST(request: Request) {
           .eq("id", target.id);
 
         if (studentUpdateError) {
+          const dbError = safeDbError(studentUpdateError);
+
+          console.error("Student update failed:", {
+            email: target.email,
+            ...dbError,
+          });
+
           return fail(
-            `Could not update student record for ${target.email}: ${studentUpdateError.message}`,
-            500
+            `Could not update student record for ${target.email}.`,
+            500,
+            { databaseError: dbError }
           );
         }
       } else {
@@ -189,9 +242,17 @@ export async function POST(request: Request) {
           });
 
         if (studentInsertError) {
+          const dbError = safeDbError(studentInsertError);
+
+          console.error("Student insert failed:", {
+            email: target.email,
+            ...dbError,
+          });
+
           return fail(
-            `Could not create student record for ${target.email}: ${studentInsertError.message}`,
-            500
+            `Could not create student record for ${target.email}.`,
+            500,
+            { databaseError: dbError }
           );
         }
       }
@@ -199,21 +260,43 @@ export async function POST(request: Request) {
       results.push(`${target.email}: ${target.role}`);
     }
 
-    // Verify saved roles before reporting success.
-    const { data: savedProfiles, error: verifyError } = await supabaseAdmin
-      .from("profiles")
-      .select("id,email,role,is_active")
-      .in("id", TARGETS.map((target) => target.id));
+    // Verify the five expected profiles and roles.
+    const { data: savedProfiles, error: verifyError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select("id,email,role,is_active")
+        .in(
+          "id",
+          TARGETS.map((target) => target.id)
+        );
 
-    if (verifyError || !savedProfiles || savedProfiles.length !== TARGETS.length) {
+    if (verifyError) {
+      const dbError = safeDbError(verifyError);
+
+      console.error("Profile verification failed:", dbError);
+
       return fail(
-        "Setup ran, but final verification failed. Check the profiles table before retrying.",
-        500
+        "Could not verify saved profiles.",
+        500,
+        { databaseError: dbError }
+      );
+    }
+
+    if (!savedProfiles || savedProfiles.length !== TARGETS.length) {
+      return fail(
+        "Not all five profiles were found after setup.",
+        500,
+        {
+          expected: TARGETS.length,
+          found: savedProfiles?.length ?? 0,
+        }
       );
     }
 
     for (const target of TARGETS) {
-      const saved = savedProfiles.find((profile) => profile.id === target.id);
+      const saved = savedProfiles.find(
+        (profile) => profile.id === target.id
+      );
 
       if (
         !saved ||
