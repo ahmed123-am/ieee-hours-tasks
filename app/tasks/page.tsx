@@ -149,7 +149,7 @@ export default function TasksPage() {
   const t = (ar: string, en: string) => (isArabic ? ar : en);
 
   const canManage = role === "admin" || role === "secretary";
-  const isStudent = role === "student";
+  const canSubmit = role !== null;
 
   const committeeLabel = (committee: string | null) =>
     committee ?? t("غير محددة", "Not specified");
@@ -271,7 +271,10 @@ export default function TasksPage() {
 
       if (!cancelled) setRole(currentRole);
 
-      if (currentRole === "student") {
+      let committee = profile.committee ?? null;
+
+      // Students may have their committee stored only in the students table.
+      if (currentRole === "student" && !committee) {
         const { data: student, error: studentError } = await supabase
           .from("students")
           .select("committee")
@@ -281,18 +284,15 @@ export default function TasksPage() {
         if (studentError) {
           console.error("Student committee error:", studentError);
         }
-
-        const committee =
-          student?.committee ?? profile.committee ?? null;
-
-        if (!cancelled) {
-          setStudentCommittee(committee as Committee | null);
-        }
-
-        if (committee) {
-          await loadStudentSubmissions(user.id);
-        }
+        committee = student?.committee ?? null;
       }
+
+      if (!cancelled) {
+        setStudentCommittee(committee as Committee | null);
+      }
+
+      // Every active account loads its own submissions, not students only.
+      await loadStudentSubmissions(user.id);
 
       if (!cancelled) await loadTasks();
     }
@@ -307,19 +307,11 @@ export default function TasksPage() {
   const visibleTasks = useMemo(() => {
     let result = tasks;
 
-    if (isStudent) {
+    // Every signed-in role can solve published tasks available to participants.
+    // Drafts/closed tasks remain visible to task managers only.
+    if (!canManage) {
       result = result.filter(
-        (task) =>
-          task.status === "published" &&
-          task.visibility === "all" &&
-          !!studentCommittee &&
-          task.committee === studentCommittee
-      );
-    } else if (role === "volunteer") {
-      result = result.filter(
-        (task) =>
-          task.status === "published" &&
-          task.visibility === "all"
+        (task) => task.status === "published" && task.visibility === "all"
       );
     }
 
@@ -339,7 +331,7 @@ export default function TasksPage() {
     });
   }, [
     tasks,
-    isStudent,
+    canManage,
     role,
     studentCommittee,
     search,
@@ -508,7 +500,7 @@ export default function TasksPage() {
   async function handleSubmission(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!submissionTask || !isStudent || submitting) return;
+    if (!submissionTask || !canSubmit || submitting) return;
 
     if (
       existingSubmission &&
@@ -681,7 +673,7 @@ export default function TasksPage() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-400">
-            {isStudent
+            {canSubmit
               ? t(
                   "تابع مهام لجنتك وسلّم أعمالك للحصول على ساعات المشاركة.",
                   "View your committee tasks and submit your work to earn hours."
@@ -692,7 +684,7 @@ export default function TasksPage() {
                 )}
           </p>
 
-          {isStudent && studentCommittee && (
+          {canSubmit && studentCommittee && (
             <p className="mt-2 text-sm text-blue-400">
               {t("لجنتك:", "Your committee:")} {studentCommittee}
             </p>
@@ -798,7 +790,7 @@ export default function TasksPage() {
           </p>
         )}
 
-        {isStudent && !studentCommittee && !loading && (
+        {canSubmit && !studentCommittee && !loading && (
           <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
             {t(
               "لم يتم العثور على لجنتك في بيانات الطلاب. تواصل مع السكرتير لتحديث بياناتك.",
@@ -861,7 +853,7 @@ export default function TasksPage() {
                     </span>
                   </div>
 
-                  {isStudent && submission && (
+                  {canSubmit && submission && (
                     <div className="mt-4 rounded-xl border border-slate-800 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-slate-400">
@@ -899,7 +891,7 @@ export default function TasksPage() {
                     </div>
                   )}
 
-                  {isStudent && (
+                  {canSubmit && (
                     <div className="mt-5 border-t border-slate-800 pt-4">
                       {submission?.status === "approved" ? (
                         <div className="flex items-center gap-2 text-sm text-emerald-400">
@@ -1136,7 +1128,7 @@ export default function TasksPage() {
       )}
 
       {/* Student submission modal */}
-      {submissionTask && isStudent && (
+      {submissionTask && canSubmit && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4">
           <section
             role="dialog"
