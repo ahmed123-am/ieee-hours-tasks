@@ -8,6 +8,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+
 import {
   ClipboardList,
   Plus,
@@ -18,17 +19,19 @@ import {
   X,
   Clock3,
 } from "lucide-react";
+
 import { createClient } from "../../lib/supabase/client";
 import { useLanguage } from "../../components/LanguageProvider";
 
 type TaskStatus = "draft" | "published" | "closed";
+type TaskVisibility = "all" | "selected_heads";
 
 type Task = {
   id: string;
   title: string;
   description: string | null;
   status: TaskStatus;
-  visibility: string | null;
+  visibility: TaskVisibility;
   hours: number | null;
   created_at: string;
   created_by?: string;
@@ -39,7 +42,7 @@ type TaskForm = {
   description: string;
   hours: string;
   status: TaskStatus;
-  visibility: string;
+  visibility: TaskVisibility;
 };
 
 const emptyForm: TaskForm = {
@@ -53,6 +56,7 @@ const emptyForm: TaskForm = {
 export default function TasksPage() {
   const { language } = useLanguage();
   const isArabic = language === "ar";
+
   const supabase = useMemo(() => createClient(), []);
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -78,6 +82,12 @@ export default function TasksPage() {
 
     const label = labels[status];
     return label ? t(label[0], label[1]) : status;
+  };
+
+  const visibilityLabel = (visibility: string) => {
+    return visibility === "selected_heads"
+      ? t("رؤساء اللجان", "Committee heads")
+      : t("متاحة للجميع", "Everyone");
   };
 
   const loadTasks = useCallback(async () => {
@@ -123,15 +133,15 @@ export default function TasksPage() {
         .eq("id", user.id)
         .maybeSingle();
 
-      if (!cancelled) {
-        setCanManage(
-          !profileError &&
-            !!profile?.is_active &&
-            ["admin", "secretary"].includes(profile.role)
-        );
+      if (cancelled) return;
 
-        await loadTasks();
-      }
+      setCanManage(
+        !profileError &&
+          !!profile?.is_active &&
+          ["admin", "secretary"].includes(profile.role)
+      );
+
+      await loadTasks();
     }
 
     void initialize();
@@ -203,6 +213,11 @@ export default function TasksPage() {
       return;
     }
 
+    if (!["all", "selected_heads"].includes(form.visibility)) {
+      setError(t("قيمة الإتاحة غير صحيحة.", "Invalid visibility."));
+      return;
+    }
+
     setSaving(true);
     setError("");
     setSuccess("");
@@ -231,16 +246,19 @@ export default function TasksPage() {
         visibility: form.visibility,
       };
 
-      // created_by is set only when creating a new task.
       const result = editingTask
         ? await supabase
             .from("tasks")
             .update(taskData)
             .eq("id", editingTask.id)
-        : await supabase.from("tasks").insert({
-            ...taskData,
-            created_by: user.id,
-          });
+            .select()
+        : await supabase
+            .from("tasks")
+            .insert({
+              ...taskData,
+              created_by: user.id,
+            })
+            .select();
 
       if (result.error) {
         console.error("Save task error:", result.error);
@@ -248,12 +266,22 @@ export default function TasksPage() {
         return;
       }
 
+      if (!result.data || result.data.length === 0) {
+        setError(
+          t(
+            "لم يتم حفظ المهمة. راجع صلاحيات قاعدة البيانات.",
+            "Task was not saved. Check database permissions."
+          )
+        );
+        return;
+      }
+
       setModalOpen(false);
 
       setSuccess(
         editingTask
-          ? t("تم تعديل المهمة.", "Task updated.")
-          : t("تمت إضافة المهمة.", "Task added.")
+          ? t("تم تعديل المهمة بنجاح.", "Task updated successfully.")
+          : t("تمت إضافة المهمة بنجاح.", "Task added successfully.")
       );
 
       await loadTasks();
@@ -466,7 +494,7 @@ export default function TasksPage() {
                   </span>
 
                   <span className="rounded-lg bg-slate-800 px-3 py-2">
-                    {task.visibility ?? "—"}
+                    {visibilityLabel(task.visibility)}
                   </span>
                 </div>
 
@@ -524,9 +552,13 @@ export default function TasksPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="task-title" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-title"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("اسم المهمة", "Task title")}
                 </label>
+
                 <input
                   id="task-title"
                   value={form.title}
@@ -540,9 +572,13 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label htmlFor="task-description" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-description"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الوصف", "Description")}
                 </label>
+
                 <textarea
                   id="task-description"
                   value={form.description}
@@ -555,9 +591,13 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label htmlFor="task-hours" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-hours"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الساعات المستحقة", "Awarded hours")}
                 </label>
+
                 <input
                   id="task-hours"
                   type="number"
@@ -573,9 +613,13 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label htmlFor="task-status" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-status"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الحالة", "Status")}
                 </label>
+
                 <select
                   id="task-status"
                   value={form.status}
@@ -594,19 +638,31 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label htmlFor="task-visibility" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-visibility"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الإتاحة", "Visibility")}
                 </label>
+
                 <select
                   id="task-visibility"
                   value={form.visibility}
                   onChange={(event) =>
-                    setForm({ ...form, visibility: event.target.value })
+                    setForm({
+                      ...form,
+                      visibility: event.target.value as TaskVisibility,
+                    })
                   }
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
                 >
-                  <option value="all">{t("متاحة للجميع", "Everyone")}</option>
-                  <option value="heads">{t("رؤساء اللجان", "Committee heads")}</option>
+                  <option value="all">
+                    {t("متاحة للجميع", "Everyone")}
+                  </option>
+
+                  <option value="selected_heads">
+                    {t("رؤساء اللجان", "Committee heads")}
+                  </option>
                 </select>
               </div>
 
