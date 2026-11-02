@@ -790,15 +790,6 @@ export default function TasksPage() {
           </p>
         )}
 
-        {canSubmit && !studentCommittee && !loading && (
-          <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
-            {t(
-              "لم يتم العثور على لجنتك في بيانات الطلاب. تواصل مع السكرتير لتحديث بياناتك.",
-              "Your committee was not found. Contact the secretary to update your student record."
-            )}
-          </p>
-        )}
-
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {loading ? (
             <p className="py-10 text-center text-slate-400">
