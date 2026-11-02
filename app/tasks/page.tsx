@@ -18,17 +18,29 @@ import {
   Trash2,
   X,
   Clock3,
-  Upload,
-  Link as LinkIcon,
   Send,
+  Upload,
+  ExternalLink,
   FileText,
   CheckCircle2,
-  AlertCircle,
-  ExternalLink,
+  XCircle,
+  Eye,
 } from "lucide-react";
 
 import { createClient } from "../../lib/supabase/client";
 import { useLanguage } from "../../components/LanguageProvider";
+
+type Role =
+  | "admin"
+  | "secretary"
+  | "board"
+  | "head"
+  | "volunteer"
+  | "student";
+
+type TaskStatus = "draft" | "published" | "closed";
+type TaskVisibility = "all" | "selected_heads";
+type SubmissionStatus = "pending" | "approved" | "rejected";
 
 type Committee =
   | "CORE"
@@ -38,21 +50,25 @@ type Committee =
   | "PROGRAMMING"
   | "MEDIA";
 
-type TaskStatus = "draft" | "published" | "closed";
-type TaskVisibility = "all" | "selected_heads";
-
-type SubmissionStatus = "pending" | "approved" | "rejected";
-
 type Task = {
   id: string;
   title: string;
   description: string | null;
   status: TaskStatus;
   visibility: TaskVisibility;
-  hours: number | null;
   committee: Committee | null;
+  hours: number | null;
   created_at: string;
   created_by?: string;
+};
+
+type TaskForm = {
+  title: string;
+  description: string;
+  hours: string;
+  status: TaskStatus;
+  visibility: TaskVisibility;
+  committee: Committee | "";
 };
 
 type Submission = {
@@ -67,16 +83,7 @@ type Submission = {
   created_at: string;
 };
 
-type TaskForm = {
-  title: string;
-  description: string;
-  hours: string;
-  status: TaskStatus;
-  visibility: TaskVisibility;
-  committee: Committee | "";
-};
-
-const COMMITTEES: Committee[] = [
+const committees: Committee[] = [
   "CORE",
   "HR",
   "PR",
@@ -96,6 +103,13 @@ const emptyForm: TaskForm = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+const ALLOWED_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
 export default function TasksPage() {
   const { language } = useLanguage();
   const isArabic = language === "ar";
@@ -107,6 +121,10 @@ export default function TasksPage() {
     Record<string, Submission>
   >({});
 
+  const [role, setRole] = useState<Role | null>(null);
+  const [studentCommittee, setStudentCommittee] =
+    useState<Committee | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -117,231 +135,223 @@ export default function TasksPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [role, setRole] = useState("");
-  const [userId, setUserId] = useState("");
-  const [studentCommittee, setStudentCommittee] =
-    useState<Committee | null>(null);
-
   const [modalOpen, setModalOpen] = useState(false);
-  const [submitModalOpen, setSubmitModalOpen] = useState(false);
-
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-
   const [form, setForm] = useState<TaskForm>(emptyForm);
 
+  const [submissionTask, setSubmissionTask] = useState<Task | null>(null);
   const [answerText, setAnswerText] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [existingSubmission, setExistingSubmission] =
+    useState<Submission | null>(null);
 
   const t = (ar: string, en: string) => (isArabic ? ar : en);
 
-  const canManage = ["admin", "secretary"].includes(role);
+  const canManage = role === "admin" || role === "secretary";
+  const isStudent = role === "student";
 
-  const canReview = [
-    "admin",
-    "secretary",
-    "head",
-  ].includes(role);
-
-  const committeeLabel = (committee: string | null) => {
-    if (!committee) return t("غير محددة", "Not assigned");
-
-    const labels: Record<string, [string, string]> = {
-      CORE: ["الإدارة", "CORE"],
-      HR: ["الموارد البشرية", "HR"],
-      PR: ["العلاقات العامة", "PR"],
-      LOGISTICS: ["اللوجستيات", "LOGISTICS"],
-      PROGRAMMING: ["البرمجة", "PROGRAMMING"],
-      MEDIA: ["الميديا", "MEDIA"],
-    };
-
-    const item = labels[committee];
-
-    return item ? t(item[0], item[1]) : committee;
-  };
+  const committeeLabel = (committee: string | null) =>
+    committee ?? t("غير محددة", "Not specified");
 
   const statusLabel = (status: string) => {
     const labels: Record<string, [string, string]> = {
       draft: ["مسودة", "Draft"],
       published: ["نشطة", "Published"],
       closed: ["مغلقة", "Closed"],
-      pending: ["قيد المراجعة", "Pending"],
+    };
+    const label = labels[status];
+    return label ? t(label[0], label[1]) : status;
+  };
+
+  const submissionStatusLabel = (status: string) => {
+    const labels: Record<string, [string, string]> = {
+      pending: ["قيد المراجعة", "Pending review"],
       approved: ["مقبول", "Approved"],
       rejected: ["مرفوض", "Rejected"],
     };
-
-    const item = labels[status];
-
-    return item ? t(item[0], item[1]) : status;
+    const label = labels[status];
+    return label ? t(label[0], label[1]) : status;
   };
 
-  const statusStyle = (status: string) => {
-    if (status === "published" || status === "approved") {
+  const submissionStatusStyle = (status: string) => {
+    if (status === "approved") {
       return "bg-emerald-500/10 text-emerald-400";
     }
-
-    if (status === "draft" || status === "pending") {
-      return "bg-amber-500/10 text-amber-400";
-    }
-
     if (status === "rejected") {
       return "bg-red-500/10 text-red-400";
     }
-
-    return "bg-slate-500/10 text-slate-400";
+    return "bg-amber-500/10 text-amber-400";
   };
 
-  const loadUser = useCallback(async () => {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      throw new Error(
-        t("سجّل الدخول أولًا.", "Please sign in first.")
-      );
-    }
-
-    setUserId(user.id);
-
-    const { data: profile, error: profileError } =
-      await supabase
-        .from("profiles")
-        .select("role, is_active, committee")
-        .eq("id", user.id)
-        .maybeSingle();
-
-    if (profileError || !profile?.is_active) {
-      throw new Error(
-        t(
-          "حسابك غير مفعل أو لا يمكن قراءة بياناته.",
-          "Your account is inactive or profile could not be loaded."
-        )
-      );
-    }
-
-    setRole(profile.role);
-
-    const { data: student } = await supabase
-      .from("students")
-      .select("committee")
-      .ilike("email", user.email ?? "")
-      .maybeSingle();
-
-    setStudentCommittee(
-      (student?.committee as Committee | null) ?? null
-    );
-
-    return user.id;
-  }, [supabase, isArabic]);
-
   const loadTasks = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
     const { data, error: queryError } = await supabase
       .from("tasks")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (queryError) throw queryError;
+    if (queryError) {
+      console.error("Load tasks error:", queryError);
+      setError(queryError.message);
+      setTasks([]);
+    } else {
+      setTasks((data ?? []) as Task[]);
+    }
 
-    setTasks((data ?? []) as Task[]);
+    setLoading(false);
   }, [supabase]);
 
-  const loadSubmissions = useCallback(
-    async (currentUserId: string) => {
-      const { data, error: queryError } = await supabase
+  const loadStudentSubmissions = useCallback(
+    async (userId: string) => {
+      const { data, error: submissionError } = await supabase
         .from("task_submissions")
         .select("*")
-        .eq("student_id", currentUserId);
+        .eq("student_id", userId);
 
-      if (queryError) {
-        console.error("Load submissions:", queryError);
+      if (submissionError) {
+        console.error("Load submissions error:", submissionError);
+        setError(submissionError.message);
         return;
       }
 
       const mapped: Record<string, Submission> = {};
 
-      (data ?? []).forEach((item) => {
-        mapped[item.task_id] = item as Submission;
-      });
+      for (const item of (data ?? []) as Submission[]) {
+        mapped[item.task_id] = item;
+      }
 
       setSubmissions(mapped);
     },
     [supabase]
   );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const currentUserId = userId || await loadUser();
-
-      await loadTasks();
-      await loadSubmissions(currentUserId);
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : t("حدث خطأ أثناء تحميل البيانات.", "Failed to load data.")
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    userId,
-    loadUser,
-    loadTasks,
-    loadSubmissions,
-    isArabic,
-  ]);
-
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
 
-  const filteredTasks = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    async function initialize() {
+      setLoading(true);
+      setError("");
 
-    return tasks.filter((task) => {
-      const matchesSearch =
-        !q ||
-        task.title.toLowerCase().includes(q) ||
-        (task.description ?? "").toLowerCase().includes(q);
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        task.status === statusFilter;
+      if (authError || !user) {
+        if (!cancelled) {
+          setError(t("سجّل الدخول أولًا.", "Please sign in first."));
+          setLoading(false);
+        }
+        return;
+      }
 
-      const visibleToStudent =
-        role !== "student" ||
-        (
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role, is_active, committee")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError || !profile || !profile.is_active) {
+        if (!cancelled) {
+          setError(
+            t(
+              "لا يمكن تحميل بيانات حسابك أو أن الحساب غير مفعل.",
+              "Could not load your profile or your account is inactive."
+            )
+          );
+          setLoading(false);
+        }
+        return;
+      }
+
+      const currentRole = profile.role as Role;
+
+      if (!cancelled) setRole(currentRole);
+
+      if (currentRole === "student") {
+        const { data: student, error: studentError } = await supabase
+          .from("students")
+          .select("committee")
+          .ilike("email", user.email ?? "")
+          .maybeSingle();
+
+        if (studentError) {
+          console.error("Student committee error:", studentError);
+        }
+
+        const committee =
+          student?.committee ?? profile.committee ?? null;
+
+        if (!cancelled) {
+          setStudentCommittee(committee as Committee | null);
+        }
+
+        if (committee) {
+          await loadStudentSubmissions(user.id);
+        }
+      }
+
+      if (!cancelled) await loadTasks();
+    }
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, loadTasks, loadStudentSubmissions, isArabic]);
+
+  const visibleTasks = useMemo(() => {
+    let result = tasks;
+
+    if (isStudent) {
+      result = result.filter(
+        (task) =>
           task.status === "published" &&
           task.visibility === "all" &&
           !!studentCommittee &&
           task.committee === studentCommittee
-        );
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        visibleToStudent
       );
+    } else if (role === "volunteer") {
+      result = result.filter(
+        (task) =>
+          task.status === "published" &&
+          task.visibility === "all"
+      );
+    }
+
+    const q = search.trim().toLowerCase();
+
+    return result.filter((task) => {
+      const matchesSearch =
+        !q ||
+        task.title.toLowerCase().includes(q) ||
+        (task.description ?? "").toLowerCase().includes(q) ||
+        (task.committee ?? "").toLowerCase().includes(q);
+
+      const matchesStatus =
+        statusFilter === "all" || task.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
     });
   }, [
     tasks,
-    search,
-    statusFilter,
+    isStudent,
     role,
     studentCommittee,
+    search,
+    statusFilter,
   ]);
 
   function openAdd() {
     setEditingTask(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      committee: studentCommittee ?? "",
+    });
     setError("");
     setSuccess("");
     setModalOpen(true);
@@ -349,7 +359,6 @@ export default function TasksPage() {
 
   function openEdit(task: Task) {
     setEditingTask(task);
-
     setForm({
       title: task.title,
       description: task.description ?? "",
@@ -358,33 +367,29 @@ export default function TasksPage() {
       visibility: task.visibility ?? "all",
       committee: task.committee ?? "",
     });
-
     setError("");
     setSuccess("");
     setModalOpen(true);
   }
 
-  async function handleTaskSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleTaskSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (!canManage || saving) return;
 
     const hours = Number(form.hours);
 
-    if (
-      !form.title.trim() ||
-      !Number.isFinite(hours) ||
-      hours <= 0 ||
-      !form.committee
-    ) {
+    if (!form.title.trim() || !Number.isFinite(hours) || hours <= 0) {
       setError(
         t(
-          "أدخل اسم المهمة والساعات وحدد اللجنة.",
-          "Enter a title, valid hours, and select a committee."
+          "أدخل اسم المهمة وعدد ساعات صحيحًا.",
+          "Enter a title and valid hours."
         )
       );
+      return;
+    }
+
+    if (!form.committee) {
+      setError(t("اختر اللجنة الخاصة بالمهمة.", "Select the task committee."));
       return;
     }
 
@@ -395,11 +400,14 @@ export default function TasksPage() {
     try {
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
 
-      if (!user) throw new Error("Authentication required");
+      if (authError || !user) {
+        throw new Error(t("سجّل الدخول مرة أخرى.", "Please sign in again."));
+      }
 
-      const payload = {
+      const taskData = {
         title: form.title.trim(),
         description: form.description.trim() || null,
         hours,
@@ -411,20 +419,17 @@ export default function TasksPage() {
       const result = editingTask
         ? await supabase
             .from("tasks")
-            .update(payload)
+            .update(taskData)
             .eq("id", editingTask.id)
             .select()
         : await supabase
             .from("tasks")
-            .insert({
-              ...payload,
-              created_by: user.id,
-            })
+            .insert({ ...taskData, created_by: user.id })
             .select();
 
-      if (result.error) throw result.error;
+      if (result.error) throw new Error(result.error.message);
 
-      if (!result.data?.length) {
+      if (!result.data || result.data.length === 0) {
         throw new Error(
           t(
             "لم يتم حفظ المهمة. راجع صلاحيات قاعدة البيانات.",
@@ -434,21 +439,19 @@ export default function TasksPage() {
       }
 
       setModalOpen(false);
-
       setSuccess(
         editingTask
-          ? t("تم تعديل المهمة.", "Task updated.")
-          : t("تمت إضافة المهمة.", "Task created.")
+          ? t("تم تعديل المهمة بنجاح.", "Task updated successfully.")
+          : t("تمت إضافة المهمة بنجاح.", "Task added successfully.")
       );
 
       await loadTasks();
     } catch (err) {
-      console.error(err);
-
+      console.error("Save task error:", err);
       setError(
         err instanceof Error
           ? err.message
-          : t("حدث خطأ أثناء حفظ المهمة.", "Failed to save task.")
+          : t("حدث خطأ أثناء الحفظ.", "An error occurred while saving.")
       );
     } finally {
       setSaving(false);
@@ -459,13 +462,13 @@ export default function TasksPage() {
     if (!canManage) return;
 
     const confirmed = window.confirm(
-      t(
-        `هل تريد حذف المهمة "${task.title}"؟`,
-        `Delete "${task.title}"?`
-      )
+      t(`هل تريد حذف المهمة "${task.title}"؟`, `Delete "${task.title}"?`)
     );
 
     if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
 
     const { error: deleteError } = await supabase
       .from("tasks")
@@ -482,36 +485,49 @@ export default function TasksPage() {
   }
 
   function openSubmission(task: Task) {
-    setSelectedTask(task);
+    const previous = submissions[task.id] ?? null;
 
-    const existing = submissions[task.id];
-
-    setAnswerText(existing?.answer_text ?? "");
-    setExternalUrl(existing?.external_url ?? "");
-    setSelectedFile(null);
-
+    setSubmissionTask(task);
+    setExistingSubmission(previous);
+    setAnswerText(previous?.answer_text ?? "");
+    setExternalUrl(previous?.external_url ?? "");
+    setSubmissionFile(null);
     setError("");
     setSuccess("");
-    setSubmitModalOpen(true);
   }
 
-  async function handleSubmission(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  function closeSubmission() {
+    if (submitting) return;
+    setSubmissionTask(null);
+    setExistingSubmission(null);
+    setAnswerText("");
+    setExternalUrl("");
+    setSubmissionFile(null);
+  }
+
+  async function handleSubmission(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedTask || submitting || !userId) return;
+    if (!submissionTask || !isStudent || submitting) return;
 
     if (
-      !answerText.trim() &&
-      !externalUrl.trim() &&
-      !selectedFile &&
-      !submissions[selectedTask.id]?.file_path
+      existingSubmission &&
+      existingSubmission.status !== "pending"
     ) {
       setError(
         t(
-          "اكتب إجابة أو أضف ملفًا أو رابطًا واحدًا على الأقل.",
-          "Provide an answer, file, or external link."
+          "لا يمكن تعديل تسليم تمت مراجعته بالفعل.",
+          "A reviewed submission cannot be edited."
+        )
+      );
+      return;
+    }
+
+    if (!answerText.trim() && !externalUrl.trim() && !submissionFile) {
+      setError(
+        t(
+          "أضف إجابة نصية أو ملفًا أو رابطًا واحدًا على الأقل.",
+          "Add text, a file, or an external link."
         )
       );
       return;
@@ -519,43 +535,30 @@ export default function TasksPage() {
 
     if (externalUrl.trim()) {
       try {
-        const parsed = new URL(externalUrl.trim());
-
-        if (!["http:", "https:"].includes(parsed.protocol)) {
+        const parsedUrl = new URL(externalUrl.trim());
+        if (!["http:", "https:"].includes(parsedUrl.protocol)) {
           throw new Error("Invalid URL");
         }
       } catch {
-        setError(
-          t("الرابط غير صحيح.", "Please enter a valid URL.")
-        );
+        setError(t("الرابط الذي أدخلته غير صحيح.", "Please enter a valid URL."));
         return;
       }
     }
 
-    if (selectedFile) {
-      const allowedTypes = [
-        "application/pdf",
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-      ];
-
-      if (!allowedTypes.includes(selectedFile.type)) {
+    if (submissionFile) {
+      if (!ALLOWED_TYPES.includes(submissionFile.type)) {
         setError(
           t(
-            "الملفات المسموحة PDF أو JPG أو PNG أو WEBP.",
-            "Allowed files: PDF, JPG, PNG, WEBP."
+            "نوع الملف غير مدعوم. ارفع PDF أو صورة JPG أو PNG أو WEBP.",
+            "Unsupported file. Upload PDF, JPG, PNG, or WEBP."
           )
         );
         return;
       }
 
-      if (selectedFile.size > MAX_FILE_SIZE) {
+      if (submissionFile.size > MAX_FILE_SIZE) {
         setError(
-          t(
-            "الحد الأقصى لحجم الملف 10 ميجابايت.",
-            "Maximum file size is 10 MB."
-          )
+          t("حجم الملف أكبر من 10 ميجابايت.", "File size exceeds 10 MB.")
         );
         return;
       }
@@ -566,99 +569,93 @@ export default function TasksPage() {
     setSuccess("");
 
     try {
-      const existing = submissions[selectedTask.id];
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      if (existing && existing.status !== "pending") {
+      if (authError || !user) {
         throw new Error(
-          t(
-            "لا يمكن تعديل تسليم تمت مراجعته.",
-            "A reviewed submission cannot be edited."
-          )
+          t("انتهت جلسة الدخول. سجّل الدخول مرة أخرى.", "Please sign in again.")
         );
       }
 
-      let filePath = existing?.file_path ?? null;
+      let filePath = existingSubmission?.file_path ?? null;
 
-      if (selectedFile) {
+      if (submissionFile) {
         const extension =
-          selectedFile.name.split(".").pop()?.toLowerCase() || "file";
+          submissionFile.name.split(".").pop()?.toLowerCase() || "file";
 
-        const path =
-          `${userId}/${selectedTask.id}/${crypto.randomUUID()}.${extension}`;
+        const newPath = `${user.id}/${submissionTask.id}/${crypto.randomUUID()}.${extension}`;
 
         const { error: uploadError } = await supabase.storage
           .from("task-submissions")
-          .upload(path, selectedFile, {
+          .upload(newPath, submissionFile, {
             upsert: false,
-            contentType: selectedFile.type,
+            contentType: submissionFile.type,
           });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          throw new Error(
+            `${t("فشل رفع الملف:", "File upload failed:")} ${uploadError.message}`
+          );
+        }
 
-        filePath = path;
+        filePath = newPath;
       }
 
       const payload = {
-        task_id: selectedTask.id,
-        student_id: userId,
+        task_id: submissionTask.id,
+        student_id: user.id,
         answer_text: answerText.trim() || null,
         external_url: externalUrl.trim() || null,
         file_path: filePath,
-        status: "pending" as const,
-        updated_at: new Date().toISOString(),
       };
 
-      const result = existing
-        ? await supabase
-            .from("task_submissions")
-            .update({
-              answer_text: payload.answer_text,
-              external_url: payload.external_url,
-              file_path: payload.file_path,
-              updated_at: payload.updated_at,
-            })
-            .eq("id", existing.id)
-            .eq("status", "pending")
-        : await supabase
-            .from("task_submissions")
-            .insert(payload);
+      if (existingSubmission) {
+        const { error: updateError } = await supabase
+          .from("task_submissions")
+          .update(payload)
+          .eq("id", existingSubmission.id)
+          .eq("status", "pending");
 
-      if (result.error) throw result.error;
+        if (updateError) throw new Error(updateError.message);
+      } else {
+        const { error: insertError } = await supabase
+          .from("task_submissions")
+          .insert({ ...payload, status: "pending" });
 
-      setSuccess(
-        t(
-          "تم إرسال المهمة بنجاح.",
-          "Your work was submitted successfully."
-        )
-      );
+        if (insertError) throw new Error(insertError.message);
+      }
 
-      setSubmitModalOpen(false);
+      await loadStudentSubmissions(user.id);
 
-      await loadSubmissions(userId);
+      setSuccess(t("تم إرسال المهمة بنجاح.", "Task submitted successfully."));
+      setSubmissionTask(null);
+      setExistingSubmission(null);
+      setAnswerText("");
+      setExternalUrl("");
+      setSubmissionFile(null);
     } catch (err) {
-      console.error(err);
-
+      console.error("Submission error:", err);
       setError(
         err instanceof Error
           ? err.message
-          : t("حدث خطأ أثناء إرسال المهمة.", "Submission failed.")
+          : t("حدث خطأ أثناء إرسال المهمة.", "An error occurred while submitting.")
       );
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function openSubmissionFile(path: string) {
+  async function openSubmittedFile(filePath: string) {
     const { data, error: fileError } = await supabase.storage
       .from("task-submissions")
-      .createSignedUrl(path, 60);
+      .createSignedUrl(filePath, 60 * 10);
 
     if (fileError || !data?.signedUrl) {
       setError(
-        t(
-          "تعذر فتح الملف. راجع صلاحيات التخزين.",
-          "Could not open file. Check storage permissions."
-        )
+        fileError?.message ?? t("تعذر فتح الملف.", "Could not open the file.")
       );
       return;
     }
@@ -673,31 +670,44 @@ export default function TasksPage() {
     >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-blue-500">
+          <p className="mb-1 text-sm font-medium text-blue-400">
             IEEE NDETI
           </p>
 
           <h1 className="text-2xl font-bold">
-            {t("إدارة المهام", "Tasks Management")}
+            {canManage
+              ? t("إدارة المهام", "Tasks Management")
+              : t("المهام", "Tasks")}
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500">
-            {t(
-              "تابع المهام وسلّم أعمالك واحصل على ساعات المشاركة.",
-              "Explore tasks, submit your work, and earn participation hours."
-            )}
+          <p className="mt-2 text-sm text-slate-400">
+            {isStudent
+              ? t(
+                  "تابع مهام لجنتك وسلّم أعمالك للحصول على ساعات المشاركة.",
+                  "View your committee tasks and submit your work to earn hours."
+                )
+              : t(
+                  "تابع المهام وساعات المشاركة.",
+                  "Manage tasks and participation hours."
+                )}
           </p>
+
+          {isStudent && studentCommittee && (
+            <p className="mt-2 text-sm text-blue-400">
+              {t("لجنتك:", "Your committee:")} {studentCommittee}
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => void refresh()}
+            onClick={() => void loadTasks()}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-3 hover:bg-slate-800 disabled:opacity-50"
           >
             <RefreshCw
-              size={16}
+              size={17}
               className={loading ? "animate-spin" : ""}
             />
             {t("تحديث", "Refresh")}
@@ -716,36 +726,22 @@ export default function TasksPage() {
         </div>
       </header>
 
-      {role === "student" && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
-          {studentCommittee
-            ? t(
-                `لجنتك: ${committeeLabel(studentCommittee)}. ستظهر لك المهام الخاصة بلجنتك فقط.`,
-                `Your committee: ${committeeLabel(studentCommittee)}. Only your committee tasks are shown.`
-              )
-            : t(
-                "لم يتم ربط حسابك بلجنة بعد. تواصل مع الإدارة.",
-                "Your account is not assigned to a committee yet. Contact the administration."
-              )}
-        </div>
-      )}
-
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-          <ClipboardList size={22} className="text-blue-500" />
-          <p className="mt-3 text-sm text-slate-500">
-            {t("عدد المهام", "Total Tasks")}
+        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
+          <ClipboardList size={22} className="text-blue-400" />
+          <p className="mt-3 text-sm text-slate-400">
+            {t("عدد المهام", "Number of tasks")}
           </p>
-          <p className="mt-2 text-3xl font-bold">{filteredTasks.length}</p>
+          <p className="mt-2 text-3xl font-bold">{visibleTasks.length}</p>
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-          <Clock3 size={22} className="text-purple-500" />
-          <p className="mt-3 text-sm text-slate-500">
-            {t("إجمالي الساعات المحددة", "Total Task Hours")}
+        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
+          <Clock3 size={22} className="text-purple-400" />
+          <p className="mt-3 text-sm text-slate-400">
+            {t("إجمالي الساعات المحددة", "Total assigned hours")}
           </p>
           <p className="mt-2 text-3xl font-bold">
-            {filteredTasks.reduce(
+            {visibleTasks.reduce(
               (sum, task) => sum + Number(task.hours ?? 0),
               0
             )}
@@ -753,7 +749,7 @@ export default function TasksPage() {
         </article>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
         <div className="flex flex-col gap-3 md:flex-row">
           <div className="relative flex-1">
             <Search
@@ -762,12 +758,11 @@ export default function TasksPage() {
                 isArabic ? "right-3" : "left-3"
               }`}
             />
-
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("ابحث عن مهمة...", "Search tasks...")}
-              className={`w-full rounded-xl border border-slate-300 bg-white py-3 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 ${
+              className={`w-full rounded-xl border border-slate-700 bg-slate-950 py-3 outline-none focus:border-blue-500 ${
                 isArabic ? "pr-10 pl-4" : "pl-10 pr-4"
               }`}
             />
@@ -776,7 +771,7 @@ export default function TasksPage() {
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"
+            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
           >
             <option value="all">{t("كل الحالات", "All statuses")}</option>
             <option value="draft">{t("مسودة", "Draft")}</option>
@@ -787,7 +782,7 @@ export default function TasksPage() {
 
         {error && (
           <p
-            className="mt-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
             role="alert"
           >
             {error}
@@ -796,118 +791,146 @@ export default function TasksPage() {
 
         {success && (
           <p
-            className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+            className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300"
             role="status"
           >
             {success}
           </p>
         )}
 
+        {isStudent && !studentCommittee && !loading && (
+          <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
+            {t(
+              "لم يتم العثور على لجنتك في بيانات الطلاب. تواصل مع السكرتير لتحديث بياناتك.",
+              "Your committee was not found. Contact the secretary to update your student record."
+            )}
+          </p>
+        )}
+
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {loading ? (
-            <p className="py-10 text-center text-slate-500 md:col-span-3">
+            <p className="py-10 text-center text-slate-400">
               {t("جارٍ تحميل المهام...", "Loading tasks...")}
             </p>
-          ) : filteredTasks.length === 0 ? (
-            <p className="py-10 text-center text-slate-500 md:col-span-3">
-              {t("لا توجد مهام متاحة.", "No tasks available.")}
+          ) : visibleTasks.length === 0 ? (
+            <p className="py-10 text-center text-slate-400 md:col-span-2 xl:col-span-3">
+              {t("لا توجد مهام متاحة حاليًا.", "No tasks available right now.")}
             </p>
           ) : (
-            filteredTasks.map((task) => {
+            visibleTasks.map((task) => {
               const submission = submissions[task.id];
 
               return (
                 <article
                   key={task.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-950"
+                  className="rounded-2xl border border-slate-700 bg-slate-950/70 p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">
                       <ClipboardList size={21} />
                     </div>
 
                     <span
-                      className={`rounded-full px-3 py-1 text-xs ${statusStyle(task.status)}`}
+                      className={`rounded-full px-3 py-1 text-xs ${
+                        task.status === "published"
+                          ? "bg-emerald-500/10 text-emerald-300"
+                          : task.status === "draft"
+                            ? "bg-amber-500/10 text-amber-300"
+                            : "bg-slate-800 text-slate-300"
+                      }`}
                     >
                       {statusLabel(task.status)}
                     </span>
                   </div>
 
-                  <h2 className="mt-4 text-lg font-bold">
-                    {task.title}
-                  </h2>
+                  <h2 className="mt-4 text-lg font-bold">{task.title}</h2>
 
-                  <p className="mt-2 min-h-12 whitespace-pre-wrap text-sm text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 min-h-12 whitespace-pre-wrap text-sm text-slate-400">
                     {task.description ||
                       t("لا يوجد وصف للمهمة.", "No task description.")}
                   </p>
 
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-lg bg-slate-100 px-3 py-2 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span className="rounded-lg bg-slate-800 px-3 py-2">
                       <Clock3 size={13} className="mr-1 inline" />
                       {task.hours ?? 0} {t("ساعة", "hours")}
                     </span>
 
-                    <span className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                    <span className="rounded-lg bg-slate-800 px-3 py-2">
                       {committeeLabel(task.committee)}
                     </span>
                   </div>
 
-                  {role === "student" && (
-                    <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-                      {submission ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm text-slate-500">
-                              {t("حالة التسليم", "Submission status")}
-                            </span>
+                  {isStudent && submission && (
+                    <div className="mt-4 rounded-xl border border-slate-800 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-slate-400">
+                          {t("حالة التسليم", "Submission status")}
+                        </span>
 
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs ${statusStyle(submission.status)}`}
-                            >
-                              {statusLabel(submission.status)}
-                            </span>
-                          </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs ${submissionStatusStyle(
+                            submission.status
+                          )}`}
+                        >
+                          {submissionStatusLabel(submission.status)}
+                        </span>
+                      </div>
 
-                          {submission.review_note && (
-                            <p className="rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-800">
-                              {submission.review_note}
-                            </p>
-                          )}
+                      {submission.review_note && (
+                        <p className="mt-3 text-sm text-slate-300">
+                          {t("ملاحظة المراجع:", "Reviewer note:")}{" "}
+                          {submission.review_note}
+                        </p>
+                      )}
 
-                          {submission.status === "pending" && (
-                            <button
-                              type="button"
-                              onClick={() => openSubmission(task)}
-                              className="w-full rounded-xl border border-blue-500 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
-                            >
-                              {t("تعديل التسليم", "Edit submission")}
-                            </button>
+                      {submission.file_path && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void openSubmittedFile(submission.file_path!)
+                          }
+                          className="mt-3 inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
+                        >
+                          <Eye size={15} />
+                          {t("عرض الملف المرسل", "View submitted file")}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {isStudent && (
+                    <div className="mt-5 border-t border-slate-800 pt-4">
+                      {submission?.status === "approved" ? (
+                        <div className="flex items-center gap-2 text-sm text-emerald-400">
+                          <CheckCircle2 size={17} />
+                          {t(
+                            "تم قبول المهمة وإضافة الساعات.",
+                            "Task approved and hours awarded."
                           )}
                         </div>
-                      ) : task.status === "published" ? (
+                      ) : (
                         <button
                           type="button"
                           onClick={() => openSubmission(task)}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-500"
+                          disabled={task.status !== "published"}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <Send size={16} />
-                          {t("تسليم المهمة", "Submit Work")}
+                          <Send size={17} />
+                          {submission
+                            ? t("عرض / تعديل التسليم", "View / Edit submission")
+                            : t("تسليم المهمة", "Submit task")}
                         </button>
-                      ) : (
-                        <p className="text-center text-sm text-slate-400">
-                          {t("التسليم غير متاح.", "Submission unavailable.")}
-                        </p>
                       )}
                     </div>
                   )}
 
                   {canManage && (
-                    <div className="mt-5 flex gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
+                    <div className="mt-5 flex gap-2 border-t border-slate-800 pt-4">
                       <button
                         type="button"
                         onClick={() => openEdit(task)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
                       >
                         <Pencil size={15} />
                         {t("تعديل", "Edit")}
@@ -916,11 +939,20 @@ export default function TasksPage() {
                       <button
                         type="button"
                         onClick={() => void handleDelete(task)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-slate-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
                       >
                         <Trash2 size={15} />
                         {t("حذف", "Delete")}
                       </button>
+                    </div>
+                  )}
+
+                  {role === "head" && (
+                    <div className="mt-5 border-t border-slate-800 pt-4 text-sm text-slate-400">
+                      {t(
+                        "يمكنك مراجعة تسليمات الطلاب من صفحة مراجعة التسليمات.",
+                        "You can review student submissions from the Submissions page."
+                      )}
                     </div>
                   )}
                 </article>
@@ -930,15 +962,17 @@ export default function TasksPage() {
         </div>
       </section>
 
+      {/* Add/Edit task modal */}
       {modalOpen && canManage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <section
             role="dialog"
             aria-modal="true"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            aria-labelledby="task-modal-title"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-center justify-between gap-3">
-              <h2 className="text-xl font-bold">
+              <h2 id="task-modal-title" className="text-xl font-bold">
                 {editingTask
                   ? t("تعديل المهمة", "Edit Task")
                   : t("إضافة مهمة جديدة", "Add New Task")}
@@ -948,18 +982,17 @@ export default function TasksPage() {
                 type="button"
                 onClick={() => setModalOpen(false)}
                 disabled={saving}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleTaskSubmit} className="space-y-4">
+            <form onSubmit={handleTaskSave} className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm">
+                <label className="mb-2 block text-sm text-slate-300">
                   {t("اسم المهمة", "Task title")}
                 </label>
-
                 <input
                   value={form.title}
                   onChange={(event) =>
@@ -967,30 +1000,28 @@ export default function TasksPage() {
                   }
                   required
                   maxLength={150}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm">
+                <label className="mb-2 block text-sm text-slate-300">
                   {t("الوصف", "Description")}
                 </label>
-
                 <textarea
                   value={form.description}
                   onChange={(event) =>
                     setForm({ ...form, description: event.target.value })
                   }
-                  rows={4}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950"
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm">
-                  {t("اللجنة المسؤولة", "Assigned committee")}
+                <label className="mb-2 block text-sm text-slate-300">
+                  {t("اللجنة", "Committee")}
                 </label>
-
                 <select
                   value={form.committee}
                   onChange={(event) =>
@@ -1000,25 +1031,23 @@ export default function TasksPage() {
                     })
                   }
                   required
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
                 >
                   <option value="">
                     {t("اختر اللجنة", "Select committee")}
                   </option>
-
-                  {COMMITTEES.map((committee) => (
+                  {committees.map((committee) => (
                     <option key={committee} value={committee}>
-                      {committeeLabel(committee)}
+                      {committee}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm">
+                <label className="mb-2 block text-sm text-slate-300">
                   {t("الساعات المستحقة", "Awarded hours")}
                 </label>
-
                 <input
                   type="number"
                   min="0.25"
@@ -1028,15 +1057,14 @@ export default function TasksPage() {
                     setForm({ ...form, hours: event.target.value })
                   }
                   required
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm">
+                <label className="mb-2 block text-sm text-slate-300">
                   {t("الحالة", "Status")}
                 </label>
-
                 <select
                   value={form.status}
                   onChange={(event) =>
@@ -1045,7 +1073,7 @@ export default function TasksPage() {
                       status: event.target.value as TaskStatus,
                     })
                   }
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
                 >
                   <option value="draft">{t("مسودة", "Draft")}</option>
                   <option value="published">{t("نشطة", "Published")}</option>
@@ -1054,10 +1082,9 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm">
+                <label className="mb-2 block text-sm text-slate-300">
                   {t("الإتاحة", "Visibility")}
                 </label>
-
                 <select
                   value={form.visibility}
                   onChange={(event) =>
@@ -1066,20 +1093,19 @@ export default function TasksPage() {
                       visibility: event.target.value as TaskVisibility,
                     })
                   }
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
                 >
                   <option value="all">
-                    {t("طلاب اللجنة", "Committee students")}
+                    {t("متاحة للطلاب", "Available to students")}
                   </option>
-
                   <option value="selected_heads">
-                    {t("رؤساء اللجان", "Committee heads")}
+                    {t("مخصصة لرؤساء اللجان", "For committee heads")}
                   </option>
                 </select>
               </div>
 
               {error && (
-                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
+                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300">
                   {error}
                 </p>
               )}
@@ -1089,7 +1115,7 @@ export default function TasksPage() {
                   type="button"
                   onClick={() => setModalOpen(false)}
                   disabled={saving}
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm dark:border-slate-700"
+                  className="rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800"
                 >
                   {t("إلغاء", "Cancel")}
                 </button>
@@ -1101,7 +1127,7 @@ export default function TasksPage() {
                 >
                   {saving
                     ? t("جارٍ الحفظ...", "Saving...")
-                    : t("حفظ المهمة", "Save Task")}
+                    : t("حفظ", "Save")}
                 </button>
               </div>
             </form>
@@ -1109,144 +1135,176 @@ export default function TasksPage() {
         </div>
       )}
 
-      {submitModalOpen && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      {/* Student submission modal */}
+      {submissionTask && isStudent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4">
           <section
             role="dialog"
             aria-modal="true"
-            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            aria-labelledby="submission-modal-title"
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
           >
-            <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="mb-6 flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-blue-500">
+                <p className="text-sm text-blue-400">
                   {t("تسليم المهمة", "Task submission")}
                 </p>
-
-                <h2 className="mt-1 text-xl font-bold">
-                  {selectedTask.title}
+                <h2
+                  id="submission-modal-title"
+                  className="mt-1 text-xl font-bold"
+                >
+                  {submissionTask.title}
                 </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  {t("الساعات:", "Hours:")} {submissionTask.hours ?? 0}
+                </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => setSubmitModalOpen(false)}
+                onClick={closeSubmission}
                 disabled={submitting}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800"
               >
                 <X size={20} />
               </button>
             </div>
 
+            {existingSubmission &&
+              existingSubmission.status !== "pending" && (
+                <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+                  {t(
+                    "هذا التسليم تمت مراجعته ولا يمكن تعديله.",
+                    "This submission has already been reviewed and cannot be edited."
+                  )}
+                </div>
+              )}
+
             <form onSubmit={handleSubmission} className="space-y-5">
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
                   <FileText size={17} />
                   {t("الإجابة النصية", "Text answer")}
                 </label>
-
                 <textarea
                   value={answerText}
                   onChange={(event) => setAnswerText(event.target.value)}
                   rows={5}
-                  maxLength={15000}
+                  disabled={
+                    submitting ||
+                    (!!existingSubmission &&
+                      existingSubmission.status !== "pending")
+                  }
                   placeholder={t(
-                    "اكتب إجابتك أو اشرح ما قمت بتنفيذه...",
-                    "Write your answer or describe your work..."
+                    "اكتب إجابتك أو اشرح ما أنجزته...",
+                    "Write your answer or describe what you completed..."
                   )}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
               </div>
 
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
                   <Upload size={17} />
-                  {t("رفع ملف أو صورة", "Upload file or image")}
+                  {t("رفع ملف PDF أو صورة", "Upload PDF or image")}
                 </label>
-
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 p-6 text-center hover:border-blue-500 dark:border-slate-700">
-                  <Upload size={25} className="mb-2 text-blue-500" />
-
-                  <span className="text-sm font-medium">
-                    {selectedFile
-                      ? selectedFile.name
-                      : t(
-                          "اضغط لاختيار PDF أو صورة",
-                          "Choose PDF or image"
-                        )}
-                  </span>
-
-                  <span className="mt-1 text-xs text-slate-500">
-                    PDF, JPG, PNG, WEBP — 10 MB max
-                  </span>
-
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                    onChange={(event) =>
-                      setSelectedFile(event.target.files?.[0] ?? null)
-                    }
-                    className="hidden"
-                  />
-                </label>
-
-                {submissions[selectedTask.id]?.file_path && !selectedFile && (
-                  <p className="mt-2 text-xs text-slate-500">
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                  disabled={
+                    submitting ||
+                    (!!existingSubmission &&
+                      existingSubmission.status !== "pending")
+                  }
+                  onChange={(event) =>
+                    setSubmissionFile(event.target.files?.[0] ?? null)
+                  }
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-white"
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  {t(
+                    "الحد الأقصى 10 ميجابايت. الأنواع المدعومة: PDF و JPG و PNG و WEBP.",
+                    "Maximum 10 MB. Supported: PDF, JPG, PNG, WEBP."
+                  )}
+                </p>
+                {submissionFile && (
+                  <p className="mt-2 text-sm text-emerald-400">
+                    {t("الملف المختار:", "Selected file:")}{" "}
+                    {submissionFile.name}
+                  </p>
+                )}
+                {existingSubmission?.file_path && !submissionFile && (
+                  <p className="mt-2 text-sm text-slate-400">
                     {t(
-                      "يوجد ملف مرفوع بالفعل. اختر ملفًا جديدًا لاستبداله.",
-                      "An existing file is attached. Choose another file to replace it."
+                      "يوجد ملف مرفق بالفعل. اختر ملفًا جديدًا لاستبداله.",
+                      "A file is already attached. Choose a new file to replace it."
                     )}
                   </p>
                 )}
               </div>
 
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                  <LinkIcon size={17} />
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <ExternalLink size={17} />
                   {t("رابط خارجي", "External link")}
                 </label>
-
                 <input
                   type="url"
                   value={externalUrl}
                   onChange={(event) => setExternalUrl(event.target.value)}
-                  placeholder="https://drive.google.com/..."
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950"
+                  disabled={
+                    submitting ||
+                    (!!existingSubmission &&
+                      existingSubmission.status !== "pending")
+                  }
+                  placeholder="https://..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
               </div>
 
-              <div className="rounded-xl bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
-                {t(
-                  "يمكنك استخدام طريقة واحدة أو أكثر من طرق التسليم. ستتم مراجعة عملك قبل إضافة الساعات.",
-                  "You can use one or more submission methods. Your work will be reviewed before hours are awarded."
-                )}
-              </div>
+              {existingSubmission?.review_note && (
+                <div className="rounded-xl border border-slate-700 bg-slate-950 p-3">
+                  <p className="text-sm font-semibold text-slate-300">
+                    {t("ملاحظة المراجع", "Reviewer note")}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {existingSubmission.review_note}
+                  </p>
+                </div>
+              )}
 
               {error && (
-                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
+                <p
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+                  role="alert"
+                >
                   {error}
                 </p>
               )}
 
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-wrap justify-end gap-3 border-t border-slate-800 pt-4">
                 <button
                   type="button"
-                  onClick={() => setSubmitModalOpen(false)}
+                  onClick={closeSubmission}
                   disabled={submitting}
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm dark:border-slate-700"
+                  className="rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800"
                 >
-                  {t("إلغاء", "Cancel")}
+                  {t("إغلاق", "Close")}
                 </button>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-                >
-                  <Send size={16} />
-                  {submitting
-                    ? t("جارٍ الإرسال...", "Submitting...")
-                    : t("إرسال التسليم", "Submit work")}
-                </button>
+                {(!existingSubmission ||
+                  existingSubmission.status === "pending") && (
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    <Send size={16} />
+                    {submitting
+                      ? t("جارٍ الإرسال...", "Submitting...")
+                      : t("إرسال التسليم", "Submit work")}
+                  </button>
+                )}
               </div>
             </form>
           </section>
