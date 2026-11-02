@@ -1,6 +1,13 @@
+
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   ClipboardList,
   Plus,
@@ -22,6 +29,7 @@ type Task = {
   visibility: string | null;
   hours: number | null;
   created_at: string;
+  created_by?: string;
 };
 
 type TaskForm = {
@@ -57,7 +65,7 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [form, setForm] = useState<TaskForm>(emptyForm);
 
-  const t = (ar: string, en: string) => isArabic ? ar : en;
+  const t = (ar: string, en: string) => (isArabic ? ar : en);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -83,8 +91,10 @@ export default function TasksPage() {
     let cancelled = false;
 
     async function initialize() {
-      const { data: { user }, error: authError } =
-        await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
       if (authError || !user) {
         if (!cancelled) {
@@ -103,12 +113,14 @@ export default function TasksPage() {
       if (!cancelled) {
         setCanManage(
           !profileError &&
-          !!profile?.is_active &&
-          ["admin", "secretary"].includes(profile.role)
+            !!profile?.is_active &&
+            ["admin", "secretary"].includes(profile.role)
         );
       }
 
-      if (!cancelled) await loadTasks();
+      if (!cancelled) {
+        await loadTasks();
+      }
     }
 
     void initialize();
@@ -144,6 +156,7 @@ export default function TasksPage() {
 
   function openEdit(task: Task) {
     setEditingTask(task);
+
     setForm({
       title: task.title,
       description: task.description ?? "",
@@ -151,6 +164,7 @@ export default function TasksPage() {
       status: task.status,
       visibility: task.visibility ?? "all",
     });
+
     setError("");
     setSuccess("");
     setModalOpen(true);
@@ -158,12 +172,18 @@ export default function TasksPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     if (!canManage || saving) return;
 
     const hours = Number(form.hours);
 
     if (!form.title.trim() || !Number.isFinite(hours) || hours <= 0) {
-      setError(t("أدخل اسم المهمة وعدد ساعات صحيحًا.", "Enter a title and valid hours."));
+      setError(
+        t(
+          "أدخل اسم المهمة وعدد ساعات صحيحًا.",
+          "Enter a title and valid hours."
+        )
+      );
       return;
     }
 
@@ -171,41 +191,82 @@ export default function TasksPage() {
     setError("");
     setSuccess("");
 
-    const payload = {
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      hours,
-      status: form.status,
-      visibility: form.visibility,
-    };
+    try {
+      // Get the currently authenticated user.
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-    const result = editingTask
-      ? await supabase.from("tasks").update(payload).eq("id", editingTask.id)
-      : await supabase.from("tasks").insert(payload);
+      if (authError || !user) {
+        setError(
+          t(
+            "انتهت جلسة تسجيل الدخول. سجّل الدخول مرة أخرى.",
+            "Your session has expired. Please sign in again."
+          )
+        );
+        setSaving(false);
+        return;
+      }
 
-    if (result.error) {
-      console.error("Save task error:", result.error);
-      setError(result.error.message);
+      const taskData = {
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        hours,
+        status: form.status,
+        visibility: form.visibility,
+      };
+
+      // Keep created_by unchanged when editing.
+      // Set created_by only when inserting a new task.
+      const result = editingTask
+        ? await supabase
+            .from("tasks")
+            .update(taskData)
+            .eq("id", editingTask.id)
+        : await supabase.from("tasks").insert({
+            ...taskData,
+            created_by: user.id,
+          });
+
+      if (result.error) {
+        console.error("Save task error:", result.error);
+        setError(result.error.message);
+        setSaving(false);
+        return;
+      }
+
+      setModalOpen(false);
+
+      setSuccess(
+        editingTask
+          ? t("تم تعديل المهمة.", "Task updated.")
+          : t("تمت إضافة المهمة.", "Task added.")
+      );
+
+      await loadTasks();
+    } catch (submitError) {
+      console.error("Unexpected task save error:", submitError);
+
+      setError(
+        t(
+          "حدث خطأ غير متوقع أثناء حفظ المهمة.",
+          "An unexpected error occurred while saving the task."
+        )
+      );
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setModalOpen(false);
-    setSuccess(
-      editingTask
-        ? t("تم تعديل المهمة.", "Task updated.")
-        : t("تمت إضافة المهمة.", "Task added.")
-    );
-
-    await loadTasks();
-    setSaving(false);
   }
 
   async function handleDelete(task: Task) {
     if (!canManage) return;
 
     const confirmed = window.confirm(
-      t(`هل تريد حذف المهمة "${task.title}"؟`, `Delete "${task.title}"?`)
+      t(
+        `هل تريد حذف المهمة "${task.title}"؟`,
+        `Delete "${task.title}"?`
+      )
     );
 
     if (!confirmed) return;
@@ -228,15 +289,25 @@ export default function TasksPage() {
   }
 
   return (
-    <main className="space-y-6 p-4 md:p-6" dir={isArabic ? "rtl" : "ltr"}>
+    <main
+      className="space-y-6 p-4 md:p-6"
+      dir={isArabic ? "rtl" : "ltr"}
+    >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-blue-400">IEEE NDETI</p>
+          <p className="mb-1 text-sm font-medium text-blue-400">
+            IEEE NDETI
+          </p>
+
           <h1 className="text-2xl font-bold">
             {t("إدارة المهام", "Tasks Management")}
           </h1>
+
           <p className="mt-2 text-sm text-slate-400">
-            {t("أنشئ المهام وحدد ساعاتها ومدى إتاحتها.", "Create tasks and configure hours and visibility.")}
+            {t(
+              "أنشئ المهام وحدد ساعاتها ومدى إتاحتها.",
+              "Create tasks and configure hours and visibility."
+            )}
           </p>
         </div>
 
@@ -254,19 +325,28 @@ export default function TasksPage() {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
           <ClipboardList size={22} className="text-blue-400" />
+
           <p className="mt-3 text-sm text-slate-400">
             {t("إجمالي المهام الظاهرة", "Visible Tasks")}
           </p>
-          <p className="mt-2 text-3xl font-bold">{tasks.length}</p>
+
+          <p className="mt-2 text-3xl font-bold">
+            {tasks.length}
+          </p>
         </article>
 
         <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
           <Clock3 size={22} className="text-purple-400" />
+
           <p className="mt-3 text-sm text-slate-400">
             {t("إجمالي الساعات المحددة", "Total Assigned Hours")}
           </p>
+
           <p className="mt-2 text-3xl font-bold">
-            {tasks.reduce((sum, task) => sum + Number(task.hours ?? 0), 0)}
+            {tasks.reduce(
+              (sum, task) => sum + Number(task.hours ?? 0),
+              0
+            )}
           </p>
         </article>
       </section>
@@ -276,13 +356,18 @@ export default function TasksPage() {
           <div className="relative flex-1">
             <Search
               size={18}
-              className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${isArabic ? "right-3" : "left-3"}`}
+              className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${
+                isArabic ? "right-3" : "left-3"
+              }`}
             />
+
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("ابحث عن مهمة...", "Search tasks...")}
-              className={`w-full rounded-xl border border-slate-700 bg-slate-950 py-3 outline-none focus:border-blue-500 ${isArabic ? "pr-10 pl-4" : "pl-10 pr-4"}`}
+              className={`w-full rounded-xl border border-slate-700 bg-slate-950 py-3 outline-none focus:border-blue-500 ${
+                isArabic ? "pr-10 pl-4" : "pl-10 pr-4"
+              }`}
             />
           </div>
 
@@ -291,10 +376,18 @@ export default function TasksPage() {
             onChange={(event) => setStatusFilter(event.target.value)}
             className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
           >
-            <option value="all">{t("كل الحالات", "All statuses")}</option>
-            <option value="active">{t("نشطة", "Active")}</option>
-            <option value="completed">{t("مكتملة", "Completed")}</option>
-            <option value="inactive">{t("غير نشطة", "Inactive")}</option>
+            <option value="all">
+              {t("كل الحالات", "All statuses")}
+            </option>
+            <option value="active">
+              {t("نشطة", "Active")}
+            </option>
+            <option value="completed">
+              {t("مكتملة", "Completed")}
+            </option>
+            <option value="inactive">
+              {t("غير نشطة", "Inactive")}
+            </option>
           </select>
 
           <button
@@ -303,19 +396,28 @@ export default function TasksPage() {
             disabled={loading}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-3 hover:bg-slate-800 disabled:opacity-50"
           >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            <RefreshCw
+              size={16}
+              className={loading ? "animate-spin" : ""}
+            />
             {t("تحديث", "Refresh")}
           </button>
         </div>
 
         {error && (
-          <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+          <p
+            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
         {success && (
-          <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300" role="status">
+          <p
+            className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300"
+            role="status"
+          >
             {success}
           </p>
         )}
@@ -339,18 +441,25 @@ export default function TasksPage() {
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">
                     <ClipboardList size={21} />
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs ${
-                    task.status === "active"
-                      ? "bg-emerald-500/10 text-emerald-300"
-                      : "bg-slate-800 text-slate-300"
-                  }`}>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      task.status === "active"
+                        ? "bg-emerald-500/10 text-emerald-300"
+                        : "bg-slate-800 text-slate-300"
+                    }`}
+                  >
                     {task.status}
                   </span>
                 </div>
 
-                <h2 className="mt-4 text-lg font-bold">{task.title}</h2>
+                <h2 className="mt-4 text-lg font-bold">
+                  {task.title}
+                </h2>
+
                 <p className="mt-2 min-h-12 whitespace-pre-wrap text-sm text-slate-400">
-                  {task.description || t("لا يوجد وصف للمهمة.", "No task description.")}
+                  {task.description ||
+                    t("لا يوجد وصف للمهمة.", "No task description.")}
                 </p>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
@@ -358,6 +467,7 @@ export default function TasksPage() {
                     <Clock3 size={13} className="mr-1 inline" />
                     {task.hours ?? 0} {t("ساعة", "hours")}
                   </span>
+
                   <span className="rounded-lg bg-slate-800 px-3 py-2">
                     {task.visibility ?? "—"}
                   </span>
@@ -373,6 +483,7 @@ export default function TasksPage() {
                       <Pencil size={15} />
                       {t("تعديل", "Edit")}
                     </button>
+
                     <button
                       type="button"
                       onClick={() => void handleDelete(task)}
@@ -398,9 +509,15 @@ export default function TasksPage() {
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-center justify-between gap-3">
-              <h2 id="task-modal-title" className="text-xl font-bold">
-                {editingTask ? t("تعديل المهمة", "Edit Task") : t("إضافة مهمة جديدة", "Add New Task")}
+              <h2
+                id="task-modal-title"
+                className="text-xl font-bold"
+              >
+                {editingTask
+                  ? t("تعديل المهمة", "Edit Task")
+                  : t("إضافة مهمة جديدة", "Add New Task")}
               </h2>
+
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
@@ -413,13 +530,19 @@ export default function TasksPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="task-title" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-title"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("اسم المهمة", "Task title")}
                 </label>
+
                 <input
                   id="task-title"
                   value={form.title}
-                  onChange={(event) => setForm({ ...form, title: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, title: event.target.value })
+                  }
                   required
                   maxLength={150}
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
@@ -427,67 +550,104 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label htmlFor="task-description" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-description"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الوصف", "Description")}
                 </label>
+
                 <textarea
                   id="task-description"
                   value={form.description}
-                  onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, description: event.target.value })
+                  }
                   rows={3}
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="task-hours" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-hours"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الساعات المستحقة", "Awarded hours")}
                 </label>
+
                 <input
                   id="task-hours"
                   type="number"
                   min="0.25"
                   step="0.25"
                   value={form.hours}
-                  onChange={(event) => setForm({ ...form, hours: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, hours: event.target.value })
+                  }
                   required
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="task-status" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-status"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الحالة", "Status")}
                 </label>
+
                 <select
                   id="task-status"
                   value={form.status}
-                  onChange={(event) => setForm({ ...form, status: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, status: event.target.value })
+                  }
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
                 >
-                  <option value="active">{t("نشطة", "Active")}</option>
-                  <option value="completed">{t("مكتملة", "Completed")}</option>
-                  <option value="inactive">{t("غير نشطة", "Inactive")}</option>
+                  <option value="active">
+                    {t("نشطة", "Active")}
+                  </option>
+                  <option value="completed">
+                    {t("مكتملة", "Completed")}
+                  </option>
+                  <option value="inactive">
+                    {t("غير نشطة", "Inactive")}
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label htmlFor="task-visibility" className="mb-2 block text-sm text-slate-300">
+                <label
+                  htmlFor="task-visibility"
+                  className="mb-2 block text-sm text-slate-300"
+                >
                   {t("الإتاحة", "Visibility")}
                 </label>
+
                 <select
                   id="task-visibility"
                   value={form.visibility}
-                  onChange={(event) => setForm({ ...form, visibility: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, visibility: event.target.value })
+                  }
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
                 >
-                  <option value="all">{t("متاحة للجميع", "Everyone")}</option>
-                  <option value="heads">{t("رؤساء اللجان", "Committee heads")}</option>
+                  <option value="all">
+                    {t("متاحة للجميع", "Everyone")}
+                  </option>
+                  <option value="heads">
+                    {t("رؤساء اللجان", "Committee heads")}
+                  </option>
                 </select>
               </div>
 
               {error && (
-                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+                <p
+                  className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300"
+                  role="alert"
+                >
                   {error}
                 </p>
               )}
@@ -501,12 +661,15 @@ export default function TasksPage() {
                 >
                   {t("إلغاء", "Cancel")}
                 </button>
+
                 <button
                   type="submit"
                   disabled={saving || !canManage}
                   className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                 >
-                  {saving ? t("جارٍ الحفظ...", "Saving...") : t("حفظ", "Save")}
+                  {saving
+                    ? t("جارٍ الحفظ...", "Saving...")
+                    : t("حفظ", "Save")}
                 </button>
               </div>
             </form>
