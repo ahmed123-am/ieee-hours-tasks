@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Users,
   ClipboardList,
+  ClipboardCheck,
   Clock3,
   CalendarDays,
   Settings,
@@ -74,10 +75,7 @@ export default function Sidebar() {
           "student",
         ];
 
-        if (
-          !userProfile ||
-          !validRoles.includes(userProfile.role)
-        ) {
+        if (!userProfile || !validRoles.includes(userProfile.role)) {
           throw new Error("Invalid profile");
         }
 
@@ -121,6 +119,11 @@ export default function Sidebar() {
       href: "/tasks",
     },
     {
+      label: isArabic ? "مراجعة التسليمات" : "Submissions Review",
+      icon: ClipboardCheck,
+      href: "/dashboard/submissions",
+    },
+    {
       label: isArabic ? "الساعات" : "Hours",
       icon: Clock3,
       href: "/hours",
@@ -139,22 +142,30 @@ export default function Sidebar() {
 
   const role = profile?.role;
 
-  const navigation =
-    role === "admin" || role === "secretary" || role === "board"
+  const navigation: NavigationItem[] =
+    role === "admin" || role === "secretary"
       ? allNavigation
-      : role === "head"
-        ? allNavigation.filter((item) =>
-            ["/", "/tasks", "/sessions", "/hours"].includes(
-              item.href
-            )
+      : role === "board"
+        ? allNavigation.filter(
+            (item) => item.href !== "/dashboard/submissions"
           )
-        : role === "volunteer" || role === "student"
+        : role === "head"
           ? allNavigation.filter((item) =>
-              ["/", "/tasks", "/hours", "/sessions"].includes(
-                item.href
-              )
+              [
+                "/",
+                "/tasks",
+                "/dashboard/submissions",
+                "/sessions",
+                "/hours",
+              ].includes(item.href)
             )
-          : [];
+          : role === "volunteer" || role === "student"
+            ? allNavigation.filter((item) =>
+                ["/", "/tasks", "/hours", "/sessions"].includes(
+                  item.href
+                )
+              )
+            : [];
 
   function closeSidebar() {
     document.body.classList.remove("sidebar-open");
@@ -202,6 +213,7 @@ export default function Sidebar() {
           ) : (
             navigation.map((item) => {
               const Icon = item.icon;
+
               const active =
                 item.href === "/"
                   ? pathname === "/"
@@ -233,6 +245,7 @@ export default function Sidebar() {
             <strong>
               {isArabic ? "ساعات ومهام IEEE" : "IEEE Hours & Tasks"}
             </strong>
+
             <p>
               {profile?.committee ??
                 (isArabic ? "إدارة الطلاب" : "Student Management")}
