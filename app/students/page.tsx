@@ -385,7 +385,7 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold">
             {t("إدارة الطلاب", "Students Management")}
           </h1>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             {t(
               "عرض بيانات الطلاب وساعات المشاركة.",
               "Manage student records and participation hours."
@@ -405,9 +405,9 @@ export default function StudentsPage() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 p-5">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
               {t("إجمالي الطلاب", "Total Students")}
             </span>
             <Users className="text-blue-400" size={22} />
@@ -415,9 +415,9 @@ export default function StudentsPage() {
           <p className="mt-4 text-3xl font-bold">{students.length}</p>
         </article>
 
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 p-5">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
               {t("إجمالي ساعات المشاركة", "Total Participation Hours")}
             </span>
             <Clock3 className="text-purple-400" size={22} />
@@ -428,12 +428,12 @@ export default function StudentsPage() {
         </article>
       </section>
 
-      <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 p-4">
         <div className="flex flex-col gap-3 md:flex-row">
           <div className="relative flex-1">
             <Search
               size={18}
-              className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${
+              className={`absolute top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 ${
                 isArabic ? "right-3" : "left-3"
               }`}
             />
@@ -444,7 +444,7 @@ export default function StudentsPage() {
                 "ابحث بالاسم أو البريد أو اللجنة...",
                 "Search name, email, or committee..."
               )}
-              className={`w-full rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm outline-none focus:border-blue-500 ${
+              className={`w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 py-3 text-sm outline-none focus:border-blue-500 ${
                 isArabic ? "pr-10 pl-4" : "pl-10 pr-4"
               }`}
             />
@@ -453,7 +453,7 @@ export default function StudentsPage() {
           <select
             value={committeeFilter}
             onChange={(event) => setCommitteeFilter(event.target.value)}
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4 py-3 text-sm outline-none focus:border-blue-500"
           >
             <option value="all">{t("كل اللجان", "All Committees")}</option>
             {committees.map((committee) => (
@@ -467,7 +467,7 @@ export default function StudentsPage() {
             type="button"
             onClick={() => void loadStudents()}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             {t("تحديث", "Refresh")}
@@ -476,7 +476,7 @@ export default function StudentsPage() {
 
         {error && (
           <div
-            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300"
             role="alert"
           >
             {error}
@@ -494,7 +494,7 @@ export default function StudentsPage() {
 
         <div className="mt-5 overflow-x-auto">
           <table className="w-full min-w-[720px] text-right text-sm">
-            <thead className="border-b border-slate-700 text-slate-400">
+            <thead className="border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
               <tr>
                 <th className="px-3 py-4 font-medium">{t("الطالب", "Student")}</th>
                 <th className="px-3 py-4 font-medium">{t("اللجنة", "Committee")}</th>
@@ -506,12 +506,12 @@ export default function StudentsPage() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {loading ? (
                 <tr>
                   <td
                     colSpan={canManage ? 5 : 4}
-                    className="px-3 py-10 text-center text-slate-400"
+                    className="px-3 py-10 text-center text-slate-600 dark:text-slate-400"
                   >
                     {t("جارٍ تحميل الطلاب...", "Loading students...")}
                   </td>
@@ -520,22 +520,22 @@ export default function StudentsPage() {
                 <tr>
                   <td
                     colSpan={canManage ? 5 : 4}
-                    className="px-3 py-10 text-center text-slate-400"
+                    className="px-3 py-10 text-center text-slate-600 dark:text-slate-400"
                   >
                     {t("لا يوجد طلاب مطابقون للبحث.", "No matching students found.")}
                   </td>
                 </tr>
               ) : (
                 filteredStudents.map((student) => (
-                  <tr key={student.id} className="transition hover:bg-slate-800/50">
+                  <tr key={student.id} className="transition hover:bg-slate-100 dark:hover:bg-slate-800/50">
                     <td className="px-3 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300">
                           <UsersRound size={19} />
                         </div>
                         <div>
                           <p className="font-semibold">{student.full_name}</p>
-                          <p className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+                          <p className="mt-1 flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
                             <Mail size={12} />
                             {student.email}
                           </p>
@@ -543,7 +543,7 @@ export default function StudentsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-4">
-                      <span className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs">
+                      <span className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 text-xs">
                         {student.committee || t("غير محدد", "Not assigned")}
                       </span>
                     </td>
@@ -552,7 +552,7 @@ export default function StudentsPage() {
                         isArabic ? "ar-EG" : "en-US"
                       )}
                     </td>
-                    <td className="px-3 py-4 text-slate-400">
+                    <td className="px-3 py-4 text-slate-600 dark:text-slate-400">
                       {student.created_at
                         ? new Date(student.created_at).toLocaleDateString(
                             isArabic ? "ar-EG" : "en-US"
@@ -566,7 +566,7 @@ export default function StudentsPage() {
                             type="button"
                             onClick={() => openEditModal(student)}
                             title={t("تعديل", "Edit")}
-                            className="rounded-lg border border-slate-700 p-2 text-blue-300 hover:bg-blue-500/10"
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-blue-700 dark:text-blue-300 hover:bg-blue-500/10"
                           >
                             <Pencil size={16} />
                           </button>
@@ -574,7 +574,7 @@ export default function StudentsPage() {
                             type="button"
                             onClick={() => void handleDelete(student)}
                             title={t("حذف", "Delete")}
-                            className="rounded-lg border border-slate-700 p-2 text-red-300 hover:bg-red-500/10"
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-red-600 dark:text-red-300 hover:bg-red-500/10"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -599,7 +599,7 @@ export default function StudentsPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="student-modal-title"
-            className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-center justify-between gap-3">
               <h2 id="student-modal-title" className="text-xl font-bold">
@@ -611,7 +611,7 @@ export default function StudentsPage() {
                 type="button"
                 onClick={() => setModalOpen(false)}
                 disabled={saving}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800"
+                className="rounded-lg p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-label={t("إغلاق", "Close")}
               >
                 <X size={20} />
@@ -620,7 +620,7 @@ export default function StudentsPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="student-name" className="mb-2 block text-sm text-slate-300">
+                <label htmlFor="student-name" className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("الاسم الكامل", "Full Name")}
                 </label>
                 <input
@@ -631,12 +631,12 @@ export default function StudentsPage() {
                   }
                   required
                   maxLength={120}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="student-email" className="mb-2 block text-sm text-slate-300">
+                <label htmlFor="student-email" className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("البريد الإلكتروني", "Email")}
                 </label>
                 <input
@@ -648,14 +648,14 @@ export default function StudentsPage() {
                   }
                   required
                   maxLength={254}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="student-committee"
-                  className="mb-2 block text-sm text-slate-300"
+                  className="mb-2 block text-sm text-slate-700 dark:text-slate-300"
                 >
                   {t("اللجنة", "Committee")}
                 </label>
@@ -667,13 +667,13 @@ export default function StudentsPage() {
                   }
                   maxLength={100}
                   placeholder={t("مثال: Web Development", "e.g. Web Development")}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               {error && (
                 <p
-                  className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300"
+                  className="rounded-lg bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300"
                   role="alert"
                 >
                   {error}
@@ -685,7 +685,7 @@ export default function StudentsPage() {
                   type="button"
                   onClick={() => setModalOpen(false)}
                   disabled={saving}
-                  className="rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800 disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
                 >
                   {t("إلغاء", "Cancel")}
                 </button>
