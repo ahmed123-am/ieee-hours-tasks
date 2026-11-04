@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -7,195 +6,76 @@ import {
   Clock3,
   ClipboardList,
   CalendarDays,
-  ArrowUpRight,
   RefreshCw,
 } from "lucide-react";
 
-import { useLanguage } from "../LanguageProvider";
 import { createClient } from "../../lib/supabase/client";
+import { useLanguage } from "../LanguageProvider";
 
 type DashboardStats = {
-  totalStudents: number;
-  totalHours: number;
-  activeTasks: number;
-  totalSessions: number;
+  total_students: number;
+  total_hours: number;
+  active_tasks: number;
+  total_sessions: number;
+  average_hours: number;
+  total_session_hours: number;
 };
 
-type QueryIssue = {
-  name: string;
-  message: string;
-  code?: string;
-  details?: string;
-  hint?: string;
+const initialStats: DashboardStats = {
+  total_students: 0,
+  total_hours: 0,
+  active_tasks: 0,
+  total_sessions: 0,
+  average_hours: 0,
+  total_session_hours: 0,
 };
 
 export default function StatsCards() {
+  const [supabase] = useState(() => createClient());
   const { language } = useLanguage();
-  const isArabic = language === "ar";
+  const ar = language === "ar";
 
-  const [stats, setStats] = useState<DashboardStats>({
-    totalStudents: 0,
-    totalHours: 0,
-    activeTasks: 0,
-    totalSessions: 0,
-  });
-
+  const [stats, setStats] = useState<DashboardStats>(initialStats);
   const [loading, setLoading] = useState(true);
-  const [issues, setIssues] = useState<QueryIssue[]>([]);
-  const [roleInfo, setRoleInfo] = useState("لم يتم الفحص بعد");
+  const [error, setError] = useState("");
 
   const loadStats = useCallback(async () => {
     setLoading(true);
-    setIssues([]);
-
-    const supabase = createClient();
+    setError("");
 
     try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      const { data, error: statsError } = await supabase.rpc(
+        "get_dashboard_stats"
+      );
 
-      if (authError) {
-        setIssues([
-          {
-            name: "Authentication",
-            message: authError.message,
-            code: authError.code,
-          },
-        ]);
-        return;
+      if (statsError) throw statsError;
+
+      if (!data) {
+        throw new Error("No statistics returned from Supabase.");
       }
-
-      if (!user) {
-        setRoleInfo("لا توجد جلسة مستخدم");
-        setIssues([
-          {
-            name: "Authentication",
-            message: "No authenticated user session found.",
-          },
-        ]);
-        return;
-      }
-
-      // Role lookup is diagnostic only. RLS remains enforced by Supabase.
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role, is_active")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        setRoleInfo("تعذر قراءة الدور");
-        setIssues((current) => [
-          ...current,
-          {
-            name: "Profile lookup",
-            message: profileError.message,
-            code: profileError.code,
-            details: profileError.details,
-            hint: profileError.hint,
-          },
-        ]);
-      } else {
-        setRoleInfo(
-          profile
-            ? `role=${profile.role}, active=${profile.is_active}`
-            : "لا يوجد profile مطابق للمستخدم الحالي"
-        );
-      }
-
-      const [
-        studentsResult,
-        tasksResult,
-        sessionsResult,
-        hoursResult,
-      ] = await Promise.all([
-        supabase
-          .from("students")
-          .select("id", { count: "exact", head: true }),
-
-        supabase
-          .from("tasks")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "active"),
-
-        supabase
-          .from("sessions")
-          .select("id", { count: "exact", head: true }),
-
-        supabase
-          .from("students")
-          .select("total_hours"),
-      ]);
-
-      const nextIssues: QueryIssue[] = [];
-
-      const collectError = (
-        name: string,
-        error: {
-          message: string;
-          code?: string;
-          details?: string;
-          hint?: string;
-        } | null
-      ) => {
-        if (!error) return;
-
-        nextIssues.push({
-          name,
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-        });
-      };
-
-      collectError("Students query", studentsResult.error);
-      collectError("Tasks query", tasksResult.error);
-      collectError("Sessions query", sessionsResult.error);
-      collectError("Hours query", hoursResult.error);
 
       setStats({
-        totalStudents: studentsResult.error
-          ? 0
-          : studentsResult.count ?? 0,
-        activeTasks: tasksResult.error
-          ? 0
-          : tasksResult.count ?? 0,
-        totalSessions: sessionsResult.error
-          ? 0
-          : sessionsResult.count ?? 0,
-        totalHours: hoursResult.error
-          ? 0
-          : (hoursResult.data ?? []).reduce(
-              (sum, student) =>
-                sum + Number(student.total_hours ?? 0),
-              0
-            ),
+        total_students: Number(data.total_students ?? 0),
+        total_hours: Number(data.total_hours ?? 0),
+        active_tasks: Number(data.active_tasks ?? 0),
+        total_sessions: Number(data.total_sessions ?? 0),
+        average_hours: Number(data.average_hours ?? 0),
+        total_session_hours: Number(data.total_session_hours ?? 0),
       });
+    } catch (err) {
+      console.error("Dashboard statistics error:", err);
 
-      setIssues((current) => [...current, ...nextIssues]);
-
-      if (nextIssues.length > 0) {
-        console.error("Dashboard query diagnostics:", nextIssues);
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-
-      setIssues([
-        {
-          name: "Unexpected error",
-          message,
-        },
-      ]);
-
-      console.error("Dashboard statistics error:", error);
+      setError(
+        err instanceof Error
+          ? err.message
+          : ar
+            ? "تعذر تحميل الإحصائيات."
+            : "Could not load statistics."
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [supabase, ar]);
 
   useEffect(() => {
     void loadStats();
@@ -203,136 +83,119 @@ export default function StatsCards() {
 
   const cards = [
     {
-      title: isArabic ? "إجمالي الطلاب" : "Total Students",
-      value: stats.totalStudents,
-      description: isArabic ? "الطلاب المسجلون" : "Registered students",
+      title: ar ? "إجمالي الطلاب" : "Total Students",
+      value: stats.total_students,
+      description: ar ? "عدد الطلاب المسجلين" : "Registered students",
       icon: Users,
       color: "blue",
     },
     {
-      title: isArabic ? "إجمالي الساعات" : "Total Hours",
-      value: stats.totalHours,
-      description: isArabic
-        ? "الساعات المسجلة للطلاب"
-        : "Hours recorded for students",
+      title: ar ? "إجمالي الساعات" : "Total Hours",
+      value: stats.total_hours,
+      description: ar ? "الساعات المكتسبة" : "Earned hours",
       icon: Clock3,
+      color: "green",
+    },
+    {
+      title: ar ? "المهام النشطة" : "Active Tasks",
+      value: stats.active_tasks,
+      description: ar ? "المهام المنشورة" : "Published tasks",
+      icon: ClipboardList,
       color: "purple",
     },
     {
-      title: isArabic ? "المهام النشطة" : "Active Tasks",
-      value: stats.activeTasks,
-      description: isArabic ? "المهام المتاحة" : "Available tasks",
-      icon: ClipboardList,
-      color: "orange",
-    },
-    {
-      title: isArabic ? "إجمالي الجلسات" : "Total Sessions",
-      value: stats.totalSessions,
-      description: isArabic ? "جلسات الفرع" : "Branch sessions",
+      title: ar ? "إجمالي الجلسات" : "Total Sessions",
+      value: stats.total_sessions,
+      description: ar ? "الجلسات المسجلة" : "Recorded sessions",
       icon: CalendarDays,
-      color: "green",
+      color: "orange",
     },
   ];
 
   return (
-    <section
-      className="stats-grid"
-      dir={isArabic ? "rtl" : "ltr"}
-      aria-busy={loading}
-    >
-      {cards.map((card) => {
-        const Icon = card.icon;
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">
+          {ar ? "الإحصائيات العامة" : "General Statistics"}
+        </h2>
 
-        return (
-          <article className="stat-card" key={card.title}>
-            <div className="stat-card-top">
-              <div className={`stat-icon ${card.color}`}>
-                <Icon size={22} />
-              </div>
-
-              <span className="stat-trend" aria-hidden="true">
-                <ArrowUpRight size={16} />
-              </span>
-            </div>
-
-            <p className="stat-title">{card.title}</p>
-
-            <h2 className="stat-value">
-              {loading
-                ? "—"
-                : card.value.toLocaleString(
-                    isArabic ? "ar-EG" : "en-US"
-                  )}
-            </h2>
-
-            <p className="stat-description">
-              {loading
-                ? isArabic
-                  ? "جارٍ تحميل البيانات..."
-                  : "Loading data..."
-                : issues.some((issue) =>
-                    issue.name.toLowerCase().includes(
-                      card.color === "orange"
-                        ? "tasks"
-                        : card.color === "blue" ||
-                            card.color === "purple"
-                          ? "students"
-                          : "sessions"
-                    )
-                  )
-                  ? isArabic
-                    ? "تعذر تحميل هذه البيانات"
-                    : "Could not load this data"
-                  : card.description}
-            </p>
-          </article>
-        );
-      })}
-
-      {issues.length > 0 && (
-        <div
-          className="stats-error"
-          role="alert"
-          dir={isArabic ? "rtl" : "ltr"}
+        <button
+          type="button"
+          onClick={() => void loadStats()}
+          disabled={loading}
+          className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm hover:bg-[var(--hover-bg)] disabled:opacity-50"
         >
-          <p>
-            {isArabic
-              ? "تفاصيل مشكلة تحميل البيانات:"
-              : "Data loading diagnostics:"}
+          <RefreshCw
+            size={16}
+            className={loading ? "animate-spin" : ""}
+          />
+          {ar ? "تحديث" : "Refresh"}
+        </button>
+      </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700"
+        >
+          <p className="font-semibold">
+            {ar ? "حدث خطأ أثناء تحميل الإحصائيات" : "Statistics loading error"}
           </p>
 
-          <p>
-            {isArabic ? "حالة الدور: " : "Role status: "}
-            {roleInfo}
-          </p>
-
-          {issues.map((issue, index) => (
-            <div key={`${issue.name}-${index}`}>
-              <strong>{issue.name}</strong>
-              <p>{issue.message}</p>
-              {issue.code && <p>Code: {issue.code}</p>}
-              {issue.details && <p>Details: {issue.details}</p>}
-              {issue.hint && <p>Hint: {issue.hint}</p>}
-            </div>
-          ))}
+          <p className="mt-1 break-words">{error}</p>
 
           <button
             type="button"
-            className="language-toggle"
             onClick={() => void loadStats()}
-            disabled={loading}
+            className="mt-3 font-semibold underline"
           >
-            <RefreshCw size={16} />
-            {loading
-              ? isArabic
-                ? "جارٍ المحاولة..."
-                : "Retrying..."
-              : isArabic
-                ? "إعادة المحاولة"
-                : "Retry"}
+            {ar ? "حاول مرة أخرى" : "Try again"}
           </button>
         </div>
       )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card) => {
+          const Icon = card.icon;
+
+          return (
+            <article
+              key={card.title}
+              className="stat-card rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {card.title}
+                  </p>
+
+                  <p className="mt-3 text-3xl font-bold text-[var(--text-primary)]">
+                    {loading ? "—" : card.value.toLocaleString(ar ? "ar-EG" : "en-US")}
+                  </p>
+
+                  <p className="mt-2 text-xs text-[var(--text-secondary)]">
+                    {card.description}
+                  </p>
+                </div>
+
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                    card.color === "blue"
+                      ? "bg-blue-100 text-blue-700"
+                      : card.color === "green"
+                        ? "bg-green-100 text-green-700"
+                        : card.color === "purple"
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-orange-100 text-orange-700"
+                  }`}
+                >
+                  <Icon size={23} />
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
