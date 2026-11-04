@@ -1,7 +1,14 @@
 
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+
 import {
   CalendarDays,
   Plus,
@@ -42,6 +49,18 @@ type AttendanceRow = {
   hours: number;
 };
 
+type SessionStats = {
+  total_sessions: number;
+  total_students: number;
+  total_session_hours: number;
+};
+
+const initialStats: SessionStats = {
+  total_sessions: 0,
+  total_students: 0,
+  total_session_hours: 0,
+};
+
 export default function SessionsPage() {
   const [supabase] = useState(() => createClient());
   const { language } = useLanguage();
@@ -49,6 +68,8 @@ export default function SessionsPage() {
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [stats, setStats] = useState<SessionStats>(initialStats);
+
   const [attendanceBySession, setAttendanceBySession] =
     useState<Record<string, string[]>>({});
 
@@ -65,70 +86,120 @@ export default function SessionsPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+
   const [date, setDate] = useState(() => {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     return now.toISOString().slice(0, 16);
   });
+
   const [hours, setHours] = useState("1");
   const [location, setLocation] = useState("");
 
+  // تحميل الإحصائيات العامة من Supabase RPC.
+  // بيانات الطلاب والحضور تظل خاضعة لصلاحيات RLS.
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [sessionsResult, studentsResult, attendanceResult] =
-        await Promise.all([
-          supabase
-            .from("sessions")
-            .select(
-              "id, title, description, starts_at, duration_hours, location, status, organizer_id, created_by, created_at"
-            )
-            .order("starts_at", { ascending: false }),
+      const [
+        statsResult,
+        sessionsResult,
+        studentsResult,
+        attendanceResult,
+      ] = await Promise.all([
+        supabase.rpc("get_dashboard_stats"),
 
-          supabase
-            .from("students")
-            .select("id, full_name, committee, total_hours")
-            .order("full_name"),
+        supabase
+          .from("sessions")
+          .select(
+            "id, title, description, starts_at, duration_hours, location, status, organizer_id, created_by, created_at"
+          )
+          .order("starts_at", { ascending: false }),
 
-          supabase
-            .from("attendance")
-            .select("session_id, student_id"),
-        ]);
+        supabase
+          .from("students")
+          .select("id, full_name, committee, total_hours")
+          .order("full_name"),
 
-      if (sessionsResult.error) throw sessionsResult.error;
-      if (studentsResult.error) throw studentsResult.error;
-      if (attendanceResult.error) throw attendanceResult.error;
+        supabase
+          .from("attendance")
+          .select("session_id, student_id"),
+      ]);
 
-      setSessions((sessionsResult.data ?? []) as Session[]);
-      setStudents(
-        ((studentsResult.data ?? []) as Student[]).map((student) => ({
-          ...student,
-          total_hours: Number(student.total_hours ?? 0),
-        }))
-      );
+      // الإحصائيات العامة
+      if (statsResult.error) throw statsResult.error;
 
-      const attendanceMap: Record<string, string[]> = {};
-
-      for (const row of attendanceResult.data ?? []) {
-        const item = row as { session_id: string; student_id: string };
-
-        if (!attendanceMap[item.session_id]) {
-          attendanceMap[item.session_id] = [];
-        }
-
-        attendanceMap[item.session_id].push(item.student_id);
+      if (!statsResult.data) {
+        throw new Error("No statistics returned from Supabase.");
       }
 
-      setAttendanceBySession(attendanceMap);
+      setStats({
+        total_sessions: Number(
+          statsResult.data.total_sessions ?? 0
+        ),
+        total_students: Number(
+          statsResult.data.total_students ?? 0
+        ),
+        total_session_hours: Number(
+          statsResult.data.total_session_hours ?? 0
+        ),
+      });
+
+      // الجلسات
+      if (sessionsResult.error) {
+        throw sessionsResult.error;
+      }
+
+      setSessions((sessionsResult.data ?? []) as Session[]);
+
+      // بيانات الطلاب التفصيلية
+      if (studentsResult.error) {
+        console.error("Students access:", studentsResult.error);
+        setStudents([]);
+      } else {
+        setStudents(
+          ((studentsResult.data ?? []) as Student[]).map(
+            (student) => ({
+              ...student,
+              total_hours: Number(student.total_hours ?? 0),
+            })
+          )
+        );
+      }
+
+      // بيانات الحضور
+      if (attendanceResult.error) {
+        console.error("Attendance access:", attendanceResult.error);
+        setAttendanceBySession({});
+      } else {
+        const attendanceMap: Record<string, string[]> = {};
+
+        for (const row of attendanceResult.data ?? []) {
+          const item = row as {
+            session_id: string;
+            student_id: string;
+          };
+
+          if (!attendanceMap[item.session_id]) {
+            attendanceMap[item.session_id] = [];
+          }
+
+          attendanceMap[item.session_id].push(item.student_id);
+        }
+
+        setAttendanceBySession(attendanceMap);
+      }
     } catch (err) {
+      console.error("Sessions page loading error:", err);
+
       setError(
         err instanceof Error
           ? err.message
           : ar
-            ? "تعذر تحميل بيانات الجلسات."
-            : "Could not load sessions."
+            ? "تعذر تحميل بيانات الجلسات والإحصائيات."
+            : "Could not load sessions and statistics."
       );
     } finally {
       setLoading(false);
@@ -139,8 +210,12 @@ export default function SessionsPage() {
     void loadData();
   }, [loadData]);
 
-  async function createSession(event: FormEvent<HTMLFormElement>) {
+  // إنشاء جلسة جديدة
+  async function createSession(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
+
     setSaving(true);
     setError("");
     setSuccess("");
@@ -165,7 +240,9 @@ export default function SessionsPage() {
 
       if (!Number.isFinite(duration) || duration <= 0) {
         throw new Error(
-          ar ? "أدخل عدد ساعات صحيحًا." : "Enter a valid duration."
+          ar
+            ? "أدخل عدد ساعات صحيحًا."
+            : "Enter a valid duration."
         );
       }
 
@@ -193,7 +270,12 @@ export default function SessionsPage() {
       setLocation("");
       setHours("1");
 
-      setSuccess(ar ? "تم إنشاء الجلسة بنجاح." : "Session created successfully.");
+      setSuccess(
+        ar
+          ? "تم إنشاء الجلسة بنجاح."
+          : "Session created successfully."
+      );
+
       await loadData();
     } catch (err) {
       setError(
@@ -208,8 +290,11 @@ export default function SessionsPage() {
     }
   }
 
+  // تسجيل حضور الطلاب وإضافة ساعات الجلسة
   async function saveAttendance() {
-    if (!selectedSession || selectedStudents.length === 0) return;
+    if (!selectedSession || selectedStudents.length === 0) {
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -240,12 +325,16 @@ export default function SessionsPage() {
         return;
       }
 
-      const sessionHours = Number(selectedSession.duration_hours);
+      const sessionHours = Number(
+        selectedSession.duration_hours
+      );
 
-      const rows: AttendanceRow[] = toAdd.map((studentId) => ({
-        student_id: studentId,
-        hours: sessionHours,
-      }));
+      const rows: AttendanceRow[] = toAdd.map(
+        (studentId) => ({
+          student_id: studentId,
+          hours: sessionHours,
+        })
+      );
 
       const inserted = await supabase
         .from("attendance")
@@ -258,15 +347,16 @@ export default function SessionsPage() {
 
       if (inserted.error) throw inserted.error;
 
-      /*
-       * تحديث مجموع ساعات الطلاب بعد حفظ الحضور.
-       * لو فشل تحديث طالب، سيظهر الخطأ بدل اعتباره نجاحًا كاملًا.
-       */
+      // تحديث مجموع ساعات كل طالب
       for (const studentId of toAdd) {
-        const student = students.find((item) => item.id === studentId);
+        const student = students.find(
+          (item) => item.id === studentId
+        );
+
         if (!student) continue;
 
-        const newTotal = Number(student.total_hours || 0) + sessionHours;
+        const newTotal =
+          Number(student.total_hours || 0) + sessionHours;
 
         const updated = await supabase
           .from("students")
@@ -284,6 +374,7 @@ export default function SessionsPage() {
 
       setSelectedSession(null);
       setSelectedStudents([]);
+
       setSuccess(
         ar
           ? `تم تسجيل حضور ${toAdd.length} طالب وإضافة الساعات.`
@@ -300,7 +391,6 @@ export default function SessionsPage() {
             : "Could not save attendance."
       );
 
-      // نعيد تحميل البيانات لإظهار الحالة الفعلية من قاعدة البيانات.
       await loadData();
     } finally {
       setSaving(false);
@@ -308,15 +398,15 @@ export default function SessionsPage() {
   }
 
   const filteredSessions = sessions.filter((session) =>
-    `${session.title} ${session.description ?? ""} ${session.location ?? ""}`
+    `${session.title} ${session.description ?? ""} ${
+      session.location ?? ""
+    }`
       .toLowerCase()
       .includes(search.toLowerCase())
   );
 
-  const totalSessionHours = sessions.reduce(
-    (sum, session) => sum + Number(session.duration_hours || 0),
-    0
-  );
+  // القيم الثلاثة تأتي من RPC وليس من عدد الصفوف التي يستطيع المستخدم قراءتها.
+  const totalSessionHours = stats.total_session_hours;
 
   return (
     <main
@@ -328,6 +418,7 @@ export default function SessionsPage() {
           <h1 className="text-2xl font-bold">
             {ar ? "الجلسات والحضور" : "Sessions & Attendance"}
           </h1>
+
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             {ar
               ? "إدارة الجلسات وتسجيل ساعات حضور الطلاب"
@@ -343,7 +434,10 @@ export default function SessionsPage() {
             className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-3 hover:bg-[var(--hover-bg)] disabled:opacity-50"
             title={ar ? "تحديث البيانات" : "Refresh"}
           >
-            <RefreshCw size={18} />
+            <RefreshCw
+              size={18}
+              className={loading ? "animate-spin" : ""}
+            />
           </button>
 
           <button
@@ -379,31 +473,44 @@ export default function SessionsPage() {
         </div>
       )}
 
+      {/* الإحصائيات العامة */}
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat
           icon={<CalendarDays size={22} />}
           label={ar ? "إجمالي الجلسات" : "Total Sessions"}
-          value={sessions.length}
+          value={stats.total_sessions}
         />
+
         <Stat
           icon={<Users size={22} />}
           label={ar ? "إجمالي الطلاب" : "Total Students"}
-          value={students.length}
+          value={stats.total_students}
         />
+
         <Stat
           icon={<Clock3 size={22} />}
-          label={ar ? "إجمالي ساعات الجلسات" : "Total Session Hours"}
+          label={
+            ar
+              ? "إجمالي ساعات الجلسات"
+              : "Total Session Hours"
+          }
           value={totalSessionHours}
         />
       </section>
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm md:p-6">
         <div className="mb-5 flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2">
-          <Search size={18} className="text-[var(--text-secondary)]" />
+          <Search
+            size={18}
+            className="text-[var(--text-secondary)]"
+          />
+
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder={ar ? "ابحث عن جلسة..." : "Search sessions..."}
+            placeholder={
+              ar ? "ابحث عن جلسة..." : "Search sessions..."
+            }
             className="w-full bg-transparent text-[var(--text-primary)] outline-none"
           />
         </div>
@@ -425,7 +532,8 @@ export default function SessionsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredSessions.map((session) => {
-              const presentIds = attendanceBySession[session.id] ?? [];
+              const presentIds =
+                attendanceBySession[session.id] ?? [];
 
               return (
                 <article
@@ -438,11 +546,14 @@ export default function SessionsPage() {
                     </div>
 
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                      {session.duration_hours} {ar ? "ساعة" : "hours"}
+                      {session.duration_hours}{" "}
+                      {ar ? "ساعة" : "hours"}
                     </span>
                   </div>
 
-                  <h2 className="text-lg font-bold">{session.title}</h2>
+                  <h2 className="text-lg font-bold">
+                    {session.title}
+                  </h2>
 
                   <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-secondary)]">
                     {session.description ||
@@ -451,9 +562,13 @@ export default function SessionsPage() {
 
                   <p className="mt-4 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                     <CalendarDays size={16} />
+
                     {new Date(session.starts_at).toLocaleString(
                       ar ? "ar-EG" : "en-US",
-                      { dateStyle: "medium", timeStyle: "short" }
+                      {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }
                     )}
                   </p>
 
@@ -489,6 +604,7 @@ export default function SessionsPage() {
         )}
       </section>
 
+      {/* نافذة إضافة جلسة */}
       {showModal && (
         <Modal
           title={ar ? "إضافة جلسة جديدة" : "Add New Session"}
@@ -516,7 +632,13 @@ export default function SessionsPage() {
               />
             </Field>
 
-            <Field label={ar ? "تاريخ ووقت الجلسة" : "Session Date & Time"}>
+            <Field
+              label={
+                ar
+                  ? "تاريخ ووقت الجلسة"
+                  : "Session Date & Time"
+              }
+            >
               <input
                 required
                 type="datetime-local"
@@ -526,7 +648,9 @@ export default function SessionsPage() {
               />
             </Field>
 
-            <Field label={ar ? "عدد الساعات" : "Duration (hours)"}>
+            <Field
+              label={ar ? "عدد الساعات" : "Duration (hours)"}
+            >
               <input
                 required
                 min="0.25"
@@ -539,7 +663,13 @@ export default function SessionsPage() {
               />
             </Field>
 
-            <Field label={ar ? "المكان (اختياري)" : "Location (optional)"}>
+            <Field
+              label={
+                ar
+                  ? "المكان (اختياري)"
+                  : "Location (optional)"
+              }
+            >
               <input
                 value={location}
                 onChange={(event) => setLocation(event.target.value)}
@@ -564,9 +694,12 @@ export default function SessionsPage() {
         </Modal>
       )}
 
+      {/* نافذة تسجيل الحضور */}
       {selectedSession && (
         <Modal
-          title={`${ar ? "تسجيل الحضور:" : "Attendance:"} ${selectedSession.title}`}
+          title={`${
+            ar ? "تسجيل الحضور:" : "Attendance:"
+          } ${selectedSession.title}`}
           onClose={() => {
             if (!saving) setSelectedSession(null);
           }}
@@ -587,28 +720,37 @@ export default function SessionsPage() {
                 <label
                   key={student.id}
                   className={`flex items-center gap-3 rounded-xl border border-[var(--border)] p-3 ${
-                    alreadyPresent ? "opacity-60" : "cursor-pointer hover:bg-[var(--hover-bg)]"
+                    alreadyPresent
+                      ? "opacity-60"
+                      : "cursor-pointer hover:bg-[var(--hover-bg)]"
                   }`}
                 >
                   <input
                     type="checkbox"
                     disabled={alreadyPresent}
                     checked={
-                      alreadyPresent || selectedStudents.includes(student.id)
+                      alreadyPresent ||
+                      selectedStudents.includes(student.id)
                     }
                     onChange={(event) =>
                       setSelectedStudents((previous) =>
                         event.target.checked
                           ? [...previous, student.id]
-                          : previous.filter((id) => id !== student.id)
+                          : previous.filter(
+                              (id) => id !== student.id
+                            )
                       )
                     }
                   />
 
                   <span className="flex-1">
-                    <span className="block font-medium">{student.full_name}</span>
+                    <span className="block font-medium">
+                      {student.full_name}
+                    </span>
+
                     <span className="text-xs text-[var(--text-secondary)]">
-                      {student.committee || (ar ? "بدون لجنة" : "No committee")}
+                      {student.committee ||
+                        (ar ? "بدون لجنة" : "No committee")}
                     </span>
                   </span>
 
@@ -630,7 +772,9 @@ export default function SessionsPage() {
 
           <button
             type="button"
-            disabled={saving || selectedStudents.length === 0}
+            disabled={
+              saving || selectedStudents.length === 0
+            }
             onClick={() => void saveAttendance()}
             className="w-full rounded-xl bg-[#2563EB] p-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
@@ -659,10 +803,18 @@ function Stat({
 }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-      <div className="rounded-xl bg-blue-100 p-3 text-blue-700">{icon}</div>
+      <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
+        {icon}
+      </div>
+
       <div>
-        <p className="text-sm text-[var(--text-secondary)]">{label}</p>
-        <p className="mt-1 text-2xl font-bold">{value}</p>
+        <p className="text-sm text-[var(--text-secondary)]">
+          {label}
+        </p>
+
+        <p className="mt-1 text-2xl font-bold">
+          {value.toLocaleString()}
+        </p>
       </div>
     </div>
   );
@@ -702,6 +854,7 @@ function Modal({
       <div className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--foreground)] shadow-xl">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold">{title}</h2>
+
           <button
             type="button"
             onClick={onClose}
@@ -711,6 +864,7 @@ function Modal({
             <X size={20} />
           </button>
         </div>
+
         {children}
       </div>
     </div>
