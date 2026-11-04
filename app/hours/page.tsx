@@ -120,13 +120,13 @@ export default function HoursPage() {
     >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-blue-400">
+          <p className="mb-1 text-sm font-medium text-blue-600 dark:text-blue-400">
             IEEE NDETI
           </p>
           <h1 className="text-2xl font-bold">
             {t("الساعات والتقارير", "Hours & Reports")}
           </h1>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {t(
               "متابعة ساعات المشاركة وترتيب الطلاب.",
               "Track participation hours and student rankings."
@@ -139,7 +139,7 @@ export default function HoursPage() {
             type="button"
             onClick={exportCSV}
             disabled={loading || filteredStudents.length === 0}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             <Download size={17} />
             {t("تصدير CSV", "Export CSV")}
@@ -161,9 +161,9 @@ export default function HoursPage() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
-          <Users className="text-blue-400" size={23} />
-          <p className="mt-3 text-sm text-slate-400">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-5">
+          <Users className="text-blue-600 dark:text-blue-400" size={23} />
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
             {t("عدد الطلاب", "Total Students")}
           </p>
           <p className="mt-2 text-3xl font-bold">
@@ -171,9 +171,9 @@ export default function HoursPage() {
           </p>
         </article>
 
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
-          <Clock3 className="text-purple-400" size={23} />
-          <p className="mt-3 text-sm text-slate-400">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-5">
+          <Clock3 className="text-purple-700 dark:text-purple-400" size={23} />
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
             {t("إجمالي الساعات", "Total Hours")}
           </p>
           <p className="mt-2 text-3xl font-bold">
@@ -181,9 +181,9 @@ export default function HoursPage() {
           </p>
         </article>
 
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
-          <Trophy className="text-amber-400" size={23} />
-          <p className="mt-3 text-sm text-slate-400">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-5">
+          <Trophy className="text-amber-700 dark:text-amber-400" size={23} />
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
             {t("متوسط ساعات الطالب", "Average Hours per Student")}
           </p>
           <p className="mt-2 text-3xl font-bold">
@@ -195,7 +195,7 @@ export default function HoursPage() {
         </article>
       </section>
 
-      <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-4">
         <div className="relative">
           <Search
             size={18}
@@ -218,7 +218,7 @@ export default function HoursPage() {
 
         {error && (
           <p
-            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300"
             role="alert"
           >
             {error}
@@ -227,7 +227,7 @@ export default function HoursPage() {
 
         <div className="mt-5 overflow-x-auto">
           <table className="w-full min-w-[650px] text-sm">
-            <thead className="border-b border-slate-700 text-slate-400">
+            <thead className="border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
               <tr>
                 <th className="px-3 py-4 text-start">#</th>
                 <th className="px-3 py-4 text-start">
@@ -245,16 +245,16 @@ export default function HoursPage() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-10 text-center text-slate-400">
+                  <td colSpan={5} className="px-3 py-10 text-center text-slate-500 dark:text-slate-400">
                     {t("جارٍ تحميل البيانات...", "Loading data...")}
                   </td>
                 </tr>
               ) : filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-10 text-center text-slate-400">
+                  <td colSpan={5} className="px-3 py-10 text-center text-slate-500 dark:text-slate-400">
                     {t("لا توجد نتائج.", "No results found.")}
                   </td>
                 </tr>
@@ -266,13 +266,13 @@ export default function HoursPage() {
                     : 0;
 
                   return (
-                    <tr key={student.id} className="hover:bg-slate-800/50">
-                      <td className="px-3 py-4 font-semibold text-slate-400">
+                    <tr key={student.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-3 py-4 font-semibold text-slate-500 dark:text-slate-400">
                         {index + 1}
                       </td>
                       <td className="px-3 py-4">
                         <p className="font-semibold">{student.full_name}</p>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                           {student.email}
                         </p>
                       </td>
@@ -284,13 +284,13 @@ export default function HoursPage() {
                       </td>
                       <td className="px-3 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                             <div
                               className="h-full rounded-full bg-blue-500"
                               style={{ width: `${Math.min(share, 100)}%` }}
                             />
                           </div>
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
                             {share.toFixed(1)}%
                           </span>
                         </div>
@@ -303,7 +303,7 @@ export default function HoursPage() {
           </table>
         </div>
 
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
           {t("عدد النتائج:", "Results:")} {filteredStudents.length}
         </p>
       </section>

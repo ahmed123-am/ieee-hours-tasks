@@ -662,7 +662,7 @@ export default function TasksPage() {
     >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-blue-400">
+          <p className="mb-1 text-sm font-medium text-blue-600 dark:text-blue-400">
             IEEE NDETI
           </p>
 
@@ -672,7 +672,7 @@ export default function TasksPage() {
               : t("المهام", "Tasks")}
           </h1>
 
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {canSubmit
               ? t(
                   "تابع مهام لجنتك وسلّم أعمالك للحصول على ساعات المشاركة.",
@@ -685,7 +685,7 @@ export default function TasksPage() {
           </p>
 
           {canSubmit && studentCommittee && (
-            <p className="mt-2 text-sm text-blue-400">
+            <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
               {t("لجنتك:", "Your committee:")} {studentCommittee}
             </p>
           )}
@@ -696,7 +696,7 @@ export default function TasksPage() {
             type="button"
             onClick={() => void loadTasks()}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-3 hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             <RefreshCw
               size={17}
@@ -719,17 +719,17 @@ export default function TasksPage() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
-          <ClipboardList size={22} className="text-blue-400" />
-          <p className="mt-3 text-sm text-slate-400">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-5">
+          <ClipboardList size={22} className="text-blue-600 dark:text-blue-400" />
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
             {t("عدد المهام", "Number of tasks")}
           </p>
           <p className="mt-2 text-3xl font-bold">{visibleTasks.length}</p>
         </article>
 
-        <article className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
-          <Clock3 size={22} className="text-purple-400" />
-          <p className="mt-3 text-sm text-slate-400">
+        <article className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-5">
+          <Clock3 size={22} className="text-purple-700 dark:text-purple-400" />
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
             {t("إجمالي الساعات المحددة", "Total assigned hours")}
           </p>
           <p className="mt-2 text-3xl font-bold">
@@ -741,7 +741,7 @@ export default function TasksPage() {
         </article>
       </section>
 
-      <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white shadow-sm dark:bg-slate-900/70 dark:shadow-none p-4">
         <div className="flex flex-col gap-3 md:flex-row">
           <div className="relative flex-1">
             <Search
@@ -763,7 +763,7 @@ export default function TasksPage() {
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3"
           >
             <option value="all">{t("كل الحالات", "All statuses")}</option>
             <option value="draft">{t("مسودة", "Draft")}</option>
@@ -774,7 +774,7 @@ export default function TasksPage() {
 
         {error && (
           <p
-            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300"
             role="alert"
           >
             {error}
@@ -792,11 +792,11 @@ export default function TasksPage() {
 
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {loading ? (
-            <p className="py-10 text-center text-slate-400">
+            <p className="py-10 text-center text-slate-500 dark:text-slate-400">
               {t("جارٍ تحميل المهام...", "Loading tasks...")}
             </p>
           ) : visibleTasks.length === 0 ? (
-            <p className="py-10 text-center text-slate-400 md:col-span-2 xl:col-span-3">
+            <p className="py-10 text-center text-slate-500 dark:text-slate-400 md:col-span-2 xl:col-span-3">
               {t("لا توجد مهام متاحة حاليًا.", "No tasks available right now.")}
             </p>
           ) : (
@@ -806,10 +806,10 @@ export default function TasksPage() {
               return (
                 <article
                   key={task.id}
-                  className="rounded-2xl border border-slate-700 bg-slate-950/70 p-5"
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/70 p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300">
                       <ClipboardList size={21} />
                     </div>
 
@@ -828,26 +828,26 @@ export default function TasksPage() {
 
                   <h2 className="mt-4 text-lg font-bold">{task.title}</h2>
 
-                  <p className="mt-2 min-h-12 whitespace-pre-wrap text-sm text-slate-400">
+                  <p className="mt-2 min-h-12 whitespace-pre-wrap text-sm text-slate-500 dark:text-slate-400">
                     {task.description ||
                       t("لا يوجد وصف للمهمة.", "No task description.")}
                   </p>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                    <span className="rounded-lg bg-slate-800 px-3 py-2">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2">
                       <Clock3 size={13} className="mr-1 inline" />
                       {task.hours ?? 0} {t("ساعة", "hours")}
                     </span>
 
-                    <span className="rounded-lg bg-slate-800 px-3 py-2">
+                    <span className="rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2">
                       {committeeLabel(task.committee)}
                     </span>
                   </div>
 
                   {canSubmit && submission && (
-                    <div className="mt-4 rounded-xl border border-slate-800 p-3">
+                    <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
                           {t("حالة التسليم", "Submission status")}
                         </span>
 
@@ -861,7 +861,7 @@ export default function TasksPage() {
                       </div>
 
                       {submission.review_note && (
-                        <p className="mt-3 text-sm text-slate-300">
+                        <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
                           {t("ملاحظة المراجع:", "Reviewer note:")}{" "}
                           {submission.review_note}
                         </p>
@@ -873,7 +873,7 @@ export default function TasksPage() {
                           onClick={() =>
                             void openSubmittedFile(submission.file_path!)
                           }
-                          className="mt-3 inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
+                          className="mt-3 inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-300"
                         >
                           <Eye size={15} />
                           {t("عرض الملف المرسل", "View submitted file")}
@@ -883,9 +883,9 @@ export default function TasksPage() {
                   )}
 
                   {canSubmit && (
-                    <div className="mt-5 border-t border-slate-800 pt-4">
+                    <div className="mt-5 border-t border-slate-200 dark:border-slate-800 pt-4">
                       {submission?.status === "approved" ? (
-                        <div className="flex items-center gap-2 text-sm text-emerald-400">
+                        <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
                           <CheckCircle2 size={17} />
                           {t(
                             "تم قبول المهمة وإضافة الساعات.",
@@ -909,11 +909,11 @@ export default function TasksPage() {
                   )}
 
                   {canManage && (
-                    <div className="mt-5 flex gap-2 border-t border-slate-800 pt-4">
+                    <div className="mt-5 flex gap-2 border-t border-slate-200 dark:border-slate-800 pt-4">
                       <button
                         type="button"
                         onClick={() => openEdit(task)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/10"
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-500/10"
                       >
                         <Pencil size={15} />
                         {t("تعديل", "Edit")}
@@ -922,7 +922,7 @@ export default function TasksPage() {
                       <button
                         type="button"
                         onClick={() => void handleDelete(task)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-red-700 dark:text-red-300 hover:bg-red-500/10"
                       >
                         <Trash2 size={15} />
                         {t("حذف", "Delete")}
@@ -931,7 +931,7 @@ export default function TasksPage() {
                   )}
 
                   {role === "head" && (
-                    <div className="mt-5 border-t border-slate-800 pt-4 text-sm text-slate-400">
+                    <div className="mt-5 border-t border-slate-200 dark:border-slate-800 pt-4 text-sm text-slate-500 dark:text-slate-400">
                       {t(
                         "يمكنك مراجعة تسليمات الطلاب من صفحة مراجعة التسليمات.",
                         "You can review student submissions from the Submissions page."
@@ -952,7 +952,7 @@ export default function TasksPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-modal-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-center justify-between gap-3">
               <h2 id="task-modal-title" className="text-xl font-bold">
@@ -965,7 +965,7 @@ export default function TasksPage() {
                 type="button"
                 onClick={() => setModalOpen(false)}
                 disabled={saving}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800"
+                className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X size={20} />
               </button>
@@ -973,7 +973,7 @@ export default function TasksPage() {
 
             <form onSubmit={handleTaskSave} className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("اسم المهمة", "Task title")}
                 </label>
                 <input
@@ -983,12 +983,12 @@ export default function TasksPage() {
                   }
                   required
                   maxLength={150}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("الوصف", "Description")}
                 </label>
                 <textarea
@@ -997,12 +997,12 @@ export default function TasksPage() {
                     setForm({ ...form, description: event.target.value })
                   }
                   rows={3}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("اللجنة", "Committee")}
                 </label>
                 <select
@@ -1014,7 +1014,7 @@ export default function TasksPage() {
                     })
                   }
                   required
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3"
                 >
                   <option value="">
                     {t("اختر اللجنة", "Select committee")}
@@ -1028,7 +1028,7 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("الساعات المستحقة", "Awarded hours")}
                 </label>
                 <input
@@ -1040,12 +1040,12 @@ export default function TasksPage() {
                     setForm({ ...form, hours: event.target.value })
                   }
                   required
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("الحالة", "Status")}
                 </label>
                 <select
@@ -1056,7 +1056,7 @@ export default function TasksPage() {
                       status: event.target.value as TaskStatus,
                     })
                   }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3"
                 >
                   <option value="draft">{t("مسودة", "Draft")}</option>
                   <option value="published">{t("نشطة", "Published")}</option>
@@ -1065,7 +1065,7 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">
                   {t("الإتاحة", "Visibility")}
                 </label>
                 <select
@@ -1076,7 +1076,7 @@ export default function TasksPage() {
                       visibility: event.target.value as TaskVisibility,
                     })
                   }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3"
                 >
                   <option value="all">
                     {t("متاحة للطلاب", "Available to students")}
@@ -1088,7 +1088,7 @@ export default function TasksPage() {
               </div>
 
               {error && (
-                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-300">
+                <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
                   {error}
                 </p>
               )}
@@ -1098,7 +1098,7 @@ export default function TasksPage() {
                   type="button"
                   onClick={() => setModalOpen(false)}
                   disabled={saving}
-                  className="rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   {t("إلغاء", "Cancel")}
                 </button>
@@ -1125,11 +1125,11 @@ export default function TasksPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="submission-modal-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-blue-400">
+                <p className="text-sm text-blue-600 dark:text-blue-400">
                   {t("تسليم المهمة", "Task submission")}
                 </p>
                 <h2
@@ -1138,7 +1138,7 @@ export default function TasksPage() {
                 >
                   {submissionTask.title}
                 </h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                   {t("الساعات:", "Hours:")} {submissionTask.hours ?? 0}
                 </p>
               </div>
@@ -1147,7 +1147,7 @@ export default function TasksPage() {
                 type="button"
                 onClick={closeSubmission}
                 disabled={submitting}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800"
+                className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X size={20} />
               </button>
@@ -1165,7 +1165,7 @@ export default function TasksPage() {
 
             <form onSubmit={handleSubmission} className="space-y-5">
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
                   <FileText size={17} />
                   {t("الإجابة النصية", "Text answer")}
                 </label>
@@ -1182,12 +1182,12 @@ export default function TasksPage() {
                     "اكتب إجابتك أو اشرح ما أنجزته...",
                     "Write your answer or describe what you completed..."
                   )}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
               </div>
 
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
                   <Upload size={17} />
                   {t("رفع ملف PDF أو صورة", "Upload PDF or image")}
                 </label>
@@ -1202,22 +1202,22 @@ export default function TasksPage() {
                   onChange={(event) =>
                     setSubmissionFile(event.target.files?.[0] ?? null)
                   }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-white"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-white"
                 />
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   {t(
                     "الحد الأقصى 10 ميجابايت. الأنواع المدعومة: PDF و JPG و PNG و WEBP.",
                     "Maximum 10 MB. Supported: PDF, JPG, PNG, WEBP."
                   )}
                 </p>
                 {submissionFile && (
-                  <p className="mt-2 text-sm text-emerald-400">
+                  <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
                     {t("الملف المختار:", "Selected file:")}{" "}
                     {submissionFile.name}
                   </p>
                 )}
                 {existingSubmission?.file_path && !submissionFile && (
-                  <p className="mt-2 text-sm text-slate-400">
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                     {t(
                       "يوجد ملف مرفق بالفعل. اختر ملفًا جديدًا لاستبداله.",
                       "A file is already attached. Choose a new file to replace it."
@@ -1227,7 +1227,7 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
                   <ExternalLink size={17} />
                   {t("رابط خارجي", "External link")}
                 </label>
@@ -1241,16 +1241,16 @@ export default function TasksPage() {
                       existingSubmission.status !== "pending")
                   }
                   placeholder="https://..."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-60"
                 />
               </div>
 
               {existingSubmission?.review_note && (
-                <div className="rounded-xl border border-slate-700 bg-slate-950 p-3">
-                  <p className="text-sm font-semibold text-slate-300">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                     {t("ملاحظة المراجع", "Reviewer note")}
                   </p>
-                  <p className="mt-2 text-sm text-slate-400">
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                     {existingSubmission.review_note}
                   </p>
                 </div>
@@ -1258,19 +1258,19 @@ export default function TasksPage() {
 
               {error && (
                 <p
-                  className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300"
                   role="alert"
                 >
                   {error}
                 </p>
               )}
 
-              <div className="flex flex-wrap justify-end gap-3 border-t border-slate-800 pt-4">
+              <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 dark:border-slate-800 pt-4">
                 <button
                   type="button"
                   onClick={closeSubmission}
                   disabled={submitting}
-                  className="rounded-xl border border-slate-700 px-4 py-3 text-sm hover:bg-slate-800"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   {t("إغلاق", "Close")}
                 </button>
