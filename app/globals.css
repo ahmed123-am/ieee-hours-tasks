@@ -2822,3 +2822,228 @@ nextjs-portal {
   cursor: not-allowed;
   opacity: 0.65;
 }
+
+.notification-center {
+  position: relative;
+  display: inline-flex;
+}
+
+.notification-center .notification-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.notification-button .notification-count {
+  top: -5px;
+  inset-inline-end: -5px;
+  display: flex;
+  width: auto;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.notification-panel {
+  position: absolute;
+  z-index: 1200;
+  top: calc(100% + 10px);
+  inset-inline-end: 0;
+  width: min(390px, calc(100vw - 24px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 18px 55px rgb(0 0 0 / 24%);
+}
+
+.notification-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-panel-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.notification-panel-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.notification-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.notification-mark-read,
+.notification-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.notification-mark-read:hover,
+.notification-icon-action:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.notification-icon-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.notification-refreshing {
+  animation: notification-spin 1s linear infinite;
+}
+
+@keyframes notification-spin {
+  to { transform: rotate(360deg); }
+}
+
+.notification-list {
+  max-height: min(460px, 65vh);
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 10px;
+  border-radius: 11px;
+  color: var(--text-primary);
+}
+
+.notification-item:hover,
+.notification-item.unread {
+  background: var(--hover-bg);
+}
+
+.notification-item + .notification-item {
+  margin-top: 2px;
+}
+
+.notification-item-icon {
+  display: flex;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #e8f1ff;
+  color: #2864bd;
+}
+
+.notification-item-icon.session {
+  background: #e1f7ed;
+  color: #13865e;
+}
+
+.notification-item-icon.review,
+.notification-item-icon.submission {
+  background: #f0eaff;
+  color: #7754c8;
+}
+
+:root[data-theme="dark"] .notification-item-icon {
+  background: #1d3558;
+  color: #91bdff;
+}
+
+:root[data-theme="dark"] .notification-item-icon.session {
+  background: #183d32;
+  color: #7ce0b8;
+}
+
+:root[data-theme="dark"] .notification-item-icon.review,
+:root[data-theme="dark"] .notification-item-icon.submission {
+  background: #33284f;
+  color: #c3a8ff;
+}
+
+.notification-item-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-item-copy strong {
+  font-size: 12px;
+}
+
+.notification-item-copy > span {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.notification-item-copy time {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.notification-unread-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.notification-empty {
+  margin: 0;
+  padding: 26px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.notification-empty button {
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+@media (max-width: 480px) {
+  .notification-panel {
+    position: fixed;
+    top: 76px;
+    inset-inline: 12px;
+    width: auto;
+  }
+}
