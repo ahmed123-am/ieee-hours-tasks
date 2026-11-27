@@ -87,7 +87,6 @@ export default function SettingsPage() {
     if (!trimmedName) {
       setError(t("اكتب الاسم قبل الحفظ.", "Enter a name before saving."));
       setSuccess("");
-      setSuccess("");
       return;
     }
 
@@ -239,7 +238,8 @@ export default function SettingsPage() {
               autoComplete="name"
               required
               maxLength={100}
-              className="w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 outline-none focus:border-blue-500"
+              disabled={saving}
+              className="w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-50"
             />
           </div>
 
