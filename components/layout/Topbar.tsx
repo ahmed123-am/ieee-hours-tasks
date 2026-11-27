@@ -95,6 +95,26 @@ export default function Topbar() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleProfileUpdated(event: Event) {
+      const detail = (
+        event as CustomEvent<{ id?: string; full_name?: string }>
+      ).detail;
+
+      if (!detail?.id || typeof detail.full_name !== "string") return;
+
+      setProfile((current) =>
+        current?.id === detail.id
+          ? { ...current, full_name: detail.full_name }
+          : current
+      );
+    }
+
+    window.addEventListener("ieee-profile-updated", handleProfileUpdated);
+    return () =>
+      window.removeEventListener("ieee-profile-updated", handleProfileUpdated);
+  }, []);
+
   async function handleSignOut() {
     if (isSigningOut) return;
 
