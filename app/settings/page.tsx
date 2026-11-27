@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/components/LanguageProvider";
 
 type Profile = {
   id: string;
@@ -13,17 +14,21 @@ type Profile = {
   is_active: boolean;
 };
 
-const roleLabels: Record<string, string> = {
-  admin: "Administrator",
-  secretary: "Secretary",
-  board: "Board",
-  head: "Head",
-  volunteer: "Volunteer",
-  student: "Student",
+const roleLabels: Record<string, { ar: string; en: string }> = {
+  admin: { ar: "مدير النظام", en: "Administrator" },
+  secretary: { ar: "أمين الفرع", en: "Secretary" },
+  board: { ar: "مجلس إدارة الفرع", en: "Board" },
+  head: { ar: "مسؤول لجنة", en: "Head" },
+  volunteer: { ar: "متطوع", en: "Volunteer" },
+  student: { ar: "طالب", en: "Student" },
 };
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { language } = useLanguage();
+  const isArabic = language === "ar";
+  const t = (arabic: string, english: string) => (isArabic ? arabic : english);
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -80,7 +85,7 @@ export default function SettingsPage() {
     const trimmedName = fullName.trim();
 
     if (!trimmedName) {
-      setError("اكتب الاسم قبل الحفظ.");
+      setError(t("اكتب الاسم قبل الحفظ.", "Enter a name before saving."));
       setSuccess("");
       return;
     }
@@ -95,7 +100,12 @@ export default function SettingsPage() {
       await supabase.auth.getUser();
 
     if (authError || !authData.user) {
-      setError("انتهت جلسة تسجيل الدخول. سجّل الدخول مرة أخرى.");
+      setError(
+        t(
+          "انتهت جلسة تسجيل الدخول. سجّل الدخول مرة أخرى.",
+          "Your sign-in session has expired. Please sign in again."
+        )
+      );
       setSaving(false);
       router.replace("/login");
       return;
@@ -112,7 +122,9 @@ export default function SettingsPage() {
       .single();
 
     if (updateError) {
-      setError(`فشل حفظ الاسم: ${updateError.message}`);
+      setError(
+        `${t("فشل حفظ الاسم: ", "Failed to save name: ")}${updateError.message}`
+      );
       setSaving(false);
       return;
     }
@@ -123,13 +135,21 @@ export default function SettingsPage() {
 
     setProfile(data as Profile);
     setFullName(trimmedName);
+    window.dispatchEvent(
+      new CustomEvent("ieee-profile-updated", {
+        detail: { id: authData.user.id, full_name: trimmedName },
+      })
+    );
 
     if (metadataError) {
       setSuccess(
-        "تم حفظ الاسم في ملف الحساب. تعذر تحديث بيانات Auth الإضافية."
+        t(
+          "تم حفظ الاسم في ملف الحساب. تعذر تحديث بيانات Auth الإضافية.",
+          "The name was saved to your profile, but the additional Auth metadata could not be updated."
+        )
       );
     } else {
-      setSuccess("تم حفظ بيانات الحساب بنجاح.");
+      setSuccess(t("تم حفظ بيانات الحساب بنجاح.", "Account information saved."));
     }
 
     setSaving(false);
@@ -143,7 +163,9 @@ export default function SettingsPage() {
     const { error: signOutError } = await supabase.auth.signOut();
 
     if (signOutError) {
-      setError(`تعذر تسجيل الخروج: ${signOutError.message}`);
+      setError(
+        `${t("تعذر تسجيل الخروج: ", "Could not sign out: ")}${signOutError.message}`
+      );
       setLoggingOut(false);
       return;
     }
@@ -155,7 +177,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <main className="p-8 text-center text-slate-500">
-        جاري تحميل الإعدادات...
+        {t("جارٍ تحميل الإعدادات...", "Loading settings...")}
       </main>
     );
   }
@@ -164,7 +186,7 @@ export default function SettingsPage() {
     return (
       <main className="p-8">
         <p className="text-red-500">
-          {error || "تعذر العثور على بيانات الحساب."}
+          {error || t("تعذر العثور على بيانات الحساب.", "Account information could not be found.")}
         </p>
       </main>
     );
@@ -173,9 +195,9 @@ export default function SettingsPage() {
   return (
     <main className="mx-auto w-full max-w-4xl p-4 sm:p-8">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold">Settings</h1>
+        <h1 className="text-3xl font-bold">{t("الإعدادات", "Settings")}</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Manage your account information and session.
+          {t("إدارة بيانات حسابك وجلسة تسجيل الدخول.", "Manage your account details and session.")}
         </p>
       </header>
 
@@ -198,7 +220,7 @@ export default function SettingsPage() {
       )}
 
       <section className="mb-6 rounded-2xl border border-slate-200 p-5 sm:p-6">
-        <h2 className="mb-5 text-xl font-semibold">Account Information</h2>
+        <h2 className="mb-5 text-xl font-semibold">{t("بيانات الحساب", "Account Information")}</h2>
 
         <form onSubmit={saveProfile} className="space-y-5">
           <div>
@@ -206,7 +228,7 @@ export default function SettingsPage() {
               htmlFor="fullName"
               className="mb-2 block text-sm font-medium"
             >
-              Full Name
+              {t("الاسم الكامل", "Full Name")}
             </label>
             <input
               id="fullName"
@@ -216,13 +238,14 @@ export default function SettingsPage() {
               autoComplete="name"
               required
               maxLength={100}
-              className="w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 outline-none focus:border-blue-500"
+              disabled={saving}
+              className="w-full rounded-xl border border-slate-300 bg-transparent px-4 py-3 outline-none focus:border-blue-500 disabled:opacity-50"
             />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium">
-              Email
+              {t("البريد الإلكتروني", "Email")}
             </label>
             <input
               value={profile.email ?? ""}
@@ -230,17 +253,17 @@ export default function SettingsPage() {
               className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600"
             />
             <p className="mt-1 text-xs text-slate-500">
-              البريد الإلكتروني للعرض فقط.
+              {t("البريد الإلكتروني للعرض فقط.", "Email is read-only.")}
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium">
-                Account Role
+                {t("نوع الحساب", "Account Role")}
               </label>
               <input
-                value={roleLabels[profile.role] ?? profile.role}
+                value={roleLabels[profile.role]?.[language] ?? profile.role}
                 readOnly
                 className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600"
               />
@@ -248,10 +271,14 @@ export default function SettingsPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium">
-                Account Status
+                {t("حالة الحساب", "Account Status")}
               </label>
               <input
-                value={profile.is_active ? "Active" : "Inactive"}
+                value={
+                  profile.is_active
+                    ? t("نشط", "Active")
+                    : t("غير نشط", "Inactive")
+                }
                 readOnly
                 className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-600"
               />
@@ -263,15 +290,20 @@ export default function SettingsPage() {
             disabled={saving}
             className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {saving
+              ? t("جارٍ الحفظ...", "Saving...")
+              : t("حفظ التغييرات", "Save Changes")}
           </button>
         </form>
       </section>
 
       <section className="rounded-2xl border border-red-200 p-5 sm:p-6">
-        <h2 className="text-xl font-semibold">Sign Out</h2>
+        <h2 className="text-xl font-semibold">{t("تسجيل الخروج", "Sign Out")}</h2>
         <p className="mt-2 mb-5 text-sm text-slate-500">
-          تسجيل الخروج من حسابك على هذا الجهاز.
+          {t(
+            "تسجيل الخروج من حسابك على هذا الجهاز.",
+            "Sign out of your account on this device."
+          )}
         </p>
 
         <button
@@ -280,7 +312,9 @@ export default function SettingsPage() {
           disabled={loggingOut}
           className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loggingOut ? "Signing out..." : "تسجيل الخروج"}
+          {loggingOut
+            ? t("جارٍ تسجيل الخروج...", "Signing out...")
+            : t("تسجيل الخروج", "Sign Out")}
         </button>
       </section>
     </main>
