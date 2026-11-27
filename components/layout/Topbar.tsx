@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  Bell,
   Search,
   Menu,
   Moon,
@@ -14,6 +13,7 @@ import {
 import { useLanguage } from "../LanguageProvider";
 import { useTheme } from "../../components/ThemeProvider";
 import { createClient } from "../../lib/supabase/client";
+import NotificationsMenu from "./NotificationsMenu";
 
 type AccountRole =
   | "admin"
@@ -229,14 +229,11 @@ export default function Topbar() {
           <kbd>Ctrl K</kbd>
         </label>
 
-        <button
-          className="notification-button"
-          type="button"
-          aria-label={isArabic ? "الإشعارات" : "Notifications"}
-        >
-          <Bell size={20} />
-          <span />
-        </button>
+        <NotificationsMenu
+          userId={profile?.id}
+          role={profile?.role}
+          isArabic={isArabic}
+        />
 
         <div className="admin-profile">
           <div className="admin-avatar">
