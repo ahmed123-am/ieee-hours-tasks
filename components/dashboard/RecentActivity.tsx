@@ -116,10 +116,9 @@ export default function RecentActivity() {
       console.error("Recent activity load error:", loadError);
       setSummary(null);
       setError(
-        t(
-          "تعذر تحميل النشاط من قاعدة البيانات. اضغط تحديث للمحاولة مرة أخرى.",
-          "Could not load activity from the database. Select Refresh to try again."
-        )
+        isArabic
+          ? "تعذر تحميل النشاط من قاعدة البيانات. اضغط تحديث للمحاولة مرة أخرى."
+          : "Could not load activity from the database. Select Refresh to try again."
       );
     } finally {
       setLoading(false);
