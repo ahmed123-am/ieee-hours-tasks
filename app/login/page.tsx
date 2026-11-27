@@ -128,6 +128,10 @@ export default function LoginPage() {
             />
           </div>
 
+          <Link href="/forgot-password" className="login-forgot-password">
+            نسيت كلمة المرور؟
+          </Link>
+
           {error && (
             <p className="login-error" role="alert">
               {error}

@@ -8,10 +8,12 @@ import {
   Menu,
   Moon,
   Sun,
+  LogOut,
 } from "lucide-react";
 
 import { useLanguage } from "../LanguageProvider";
 import { useTheme } from "../../components/ThemeProvider";
+import { createClient } from "../../lib/supabase/client";
 
 type AccountRole =
   | "admin"
@@ -37,6 +39,8 @@ export default function Topbar() {
   const isDark = theme === "dark";
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +94,30 @@ export default function Topbar() {
       cancelled = true;
     };
   }, []);
+
+  async function handleSignOut() {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    setLogoutError("");
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+
+      if (error) {
+        console.warn("Local sign-out completed with a server warning:", error);
+      }
+
+      window.location.assign("/login");
+    } catch (error) {
+      console.error("Sign-out error:", error);
+      setLogoutError(
+        isArabic ? "تعذر تسجيل الخروج. حاول مرة أخرى." : "Could not sign out. Try again."
+      );
+      setIsSigningOut(false);
+    }
+  }
 
   const roleLabels: Record<AccountRole, { ar: string; en: string }> = {
     admin: { ar: "مدير النظام", en: "Administrator" },
@@ -236,6 +264,32 @@ export default function Topbar() {
             )}
           </div>
         </div>
+
+        {logoutError && (
+          <span className="logout-error" role="alert">
+            {logoutError}
+          </span>
+        )}
+
+        <button
+          className="logout-button"
+          type="button"
+          onClick={handleSignOut}
+          disabled={isSigningOut}
+          aria-label={isArabic ? "تسجيل الخروج" : "Sign out"}
+          title={isArabic ? "تسجيل الخروج" : "Sign out"}
+        >
+          <LogOut size={18} />
+          <span>
+            {isSigningOut
+              ? isArabic
+                ? "جارٍ الخروج..."
+                : "Signing out..."
+              : isArabic
+                ? "تسجيل الخروج"
+                : "Sign out"}
+          </span>
+        </button>
       </div>
     </header>
   );
