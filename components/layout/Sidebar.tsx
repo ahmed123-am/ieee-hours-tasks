@@ -157,6 +157,7 @@ export default function Sidebar() {
                 "/dashboard/submissions",
                 "/sessions",
                 "/hours",
+                "/settings",
               ].includes(item.href)
             )
           : role === "volunteer" || role === "student"
