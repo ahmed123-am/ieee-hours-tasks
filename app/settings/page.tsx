@@ -111,15 +111,9 @@ export default function SettingsPage() {
       return;
     }
 
-    const { data, error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        full_name: trimmedName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", authData.user.id)
-      .select("id,full_name,email,role,is_active")
-      .single();
+    const { error: updateError } = await supabase.rpc("update_own_name", {
+      new_full_name: trimmedName,
+    });
 
     if (updateError) {
       setError(
@@ -133,7 +127,7 @@ export default function SettingsPage() {
       data: { full_name: trimmedName },
     });
 
-    setProfile(data as Profile);
+    setProfile({ ...profile, full_name: trimmedName });
     setFullName(trimmedName);
     window.dispatchEvent(
       new CustomEvent("ieee-profile-updated", {
