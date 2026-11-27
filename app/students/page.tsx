@@ -184,9 +184,12 @@ export default function StudentsPage() {
     () =>
       Array.from(
         new Set(
-          students
-            .map((student) => student.committee?.trim())
-            .filter((value): value is string => Boolean(value))
+          students.flatMap((student) =>
+            (student.committee ?? "")
+              .split(",")
+              .map((committee) => committee.trim())
+              .filter(Boolean)
+          )
         )
       ),
     [students]
@@ -203,7 +206,10 @@ export default function StudentsPage() {
         (student.committee ?? "").toLowerCase().includes(normalizedSearch);
 
       const matchesCommittee =
-        committeeFilter === "all" || student.committee === committeeFilter;
+        committeeFilter === "all" ||
+        (student.committee ?? "")
+          .split(",")
+          .some((committee) => committee.trim() === committeeFilter);
 
       return matchesSearch && matchesCommittee;
     });

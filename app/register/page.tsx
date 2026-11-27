@@ -29,7 +29,7 @@ type Committee = (typeof COMMITTEES)[number];
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [committee, setCommittee] = useState<Committee | "">("");
+  const [committee, setCommittee] = useState<Committee[]>([]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -54,8 +54,11 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!committee || !COMMITTEES.includes(committee)) {
-      setError("اختار اللجنة اللي هتنضم ليها.");
+    if (
+      committee.length !== 2 ||
+      committee.some((item) => !COMMITTEES.includes(item))
+    ) {
+      setError("اختار لجنتين بالضبط.");
       return;
     }
 
@@ -81,7 +84,7 @@ export default function RegisterPage() {
           options: {
             data: {
               full_name: cleanName,
-              committee,
+              committee: committee.join(","),
               requested_role: "volunteer",
             },
           },
@@ -128,7 +131,7 @@ export default function RegisterPage() {
           </p>
 
           <p className="login-description">
-            اللجنة المختارة: <strong>{committee}</strong>
+            اللجنتان المختارتان: <strong>{committee.join("، ")}</strong>
           </p>
 
           {needsEmailConfirmation && (
@@ -163,7 +166,7 @@ export default function RegisterPage() {
         <h1>إنشاء حساب جديد</h1>
 
         <p className="login-description">
-          اكتب بياناتك واختار اللجنة اللي حابب تنضم ليها.
+          اكتب بياناتك واختار لجنتين تحب تنضم ليهم.
         </p>
 
         <form onSubmit={handleRegister} className="login-form">
@@ -186,31 +189,49 @@ export default function RegisterPage() {
             />
           </div>
 
-          <label htmlFor="register-committee">اختار اللجنة</label>
+          <fieldset
+            className="committee-choices"
+            aria-describedby="register-committee-help"
+            disabled={loading}
+          >
+            <legend>اختار لجنتين</legend>
 
-          <div className="login-input-wrap committee-input-wrap">
-            <Building2 size={19} />
+            <div className="committee-options">
+              {COMMITTEES.map((item) => {
+                const checked = committee.includes(item);
+                const limitReached = committee.length >= 2;
 
-            <select
-              id="register-committee"
-              name="committee"
-              value={committee}
-              onChange={(event) =>
-                setCommittee(event.target.value as Committee | "")
-              }
-              required
-              disabled={loading}
-              className="committee-select"
-            >
-              <option value="">-- اختار اللجنة --</option>
+                return (
+                  <label
+                    key={item}
+                    className={`committee-option ${checked ? "is-selected" : ""} ${!checked && limitReached ? "is-disabled" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      name="committee"
+                      value={item}
+                      checked={checked}
+                      disabled={loading || (!checked && limitReached)}
+                      onChange={() =>
+                        setCommittee((previous) =>
+                          checked
+                            ? previous.filter((selected) => selected !== item)
+                            : previous.length < 2
+                              ? [...previous, item]
+                              : previous
+                        )
+                      }
+                    />
+                    <span>{item}</span>
+                  </label>
+                );
+              })}
+            </div>
 
-              {COMMITTEES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
+            <p id="register-committee-help" className="committee-choice-hint" aria-live="polite">
+              اختار لجنتين بالضبط ({committee.length}/2)
+            </p>
+          </fieldset>
 
           <label htmlFor="register-email">البريد الإلكتروني</label>
 
