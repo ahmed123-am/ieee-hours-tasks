@@ -2727,6 +2727,66 @@ nextjs-portal {
   opacity: 0.65;
 }
 
+.login-forgot-password {
+  align-self: flex-start;
+  margin-top: -4px;
+  color: #38bdf8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-forgot-password:hover {
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+
+.logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid #3b3544;
+  border-radius: 10px;
+  background: transparent;
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.logout-button:hover:not(:disabled) {
+  border-color: #f87171;
+  background: rgb(248 113 113 / 10%);
+}
+
+.logout-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.logout-error {
+  max-width: 180px;
+  color: #f87171;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  .logout-button {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+  }
+
+  .logout-button span {
+    display: none;
+  }
+}
+
 /* Dark committee selector */
 .login-input-wrap.committee-input-wrap {
   background: #0b1323 !important;
