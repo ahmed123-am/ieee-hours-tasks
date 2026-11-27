@@ -100,12 +100,14 @@ export default function Topbar() {
       const detail = (
         event as CustomEvent<{ id?: string; full_name?: string }>
       ).detail;
+      const userId = detail?.id;
+      const fullName = detail?.full_name;
 
-      if (!detail?.id || typeof detail.full_name !== "string") return;
+      if (!userId || typeof fullName !== "string") return;
 
       setProfile((current) =>
-        current?.id === detail.id
-          ? { ...current, full_name: detail.full_name }
+        current?.id === userId
+          ? { ...current, full_name: fullName }
           : current
       );
     }
